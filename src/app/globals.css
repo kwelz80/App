@@ -1,0 +1,69 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --color-brand-50: oklch(0.97 0.02 285);
+  --color-brand-100: oklch(0.94 0.04 285);
+  --color-brand-200: oklch(0.88 0.08 285);
+  --color-brand-500: oklch(0.6 0.2 285);
+  --color-brand-600: oklch(0.52 0.22 285);
+  --color-brand-700: oklch(0.45 0.2 285);
+  --color-brand-900: oklch(0.3 0.12 285);
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+}
+
+/* Long equations scroll instead of overflowing on phones. */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+.prose table {
+  display: block;
+  overflow-x: auto;
+}
+
+.flip-card {
+  perspective: 1200px;
+}
+.flip-inner {
+  transition: transform 0.45s;
+  transform-style: preserve-3d;
+}
+.flip-card[data-flipped="true"] .flip-inner {
+  transform: rotateY(180deg);
+}
+.flip-face {
+  backface-visibility: hidden;
+}
+.flip-back {
+  transform: rotateY(180deg);
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+  .print-area {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+  .print-dense {
+    font-size: 9pt;
+    columns: 2;
+    column-gap: 1.5rem;
+  }
+}
