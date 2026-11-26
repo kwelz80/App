@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Draftline</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="config.js"></script>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://apis.google.com/js/api.js" async defer></script>
+</head>
+<body data-theme="dark">
+  <header id="bar">
+    <div class="left">
+      <strong class="brand">Draftline</strong>
+      <span id="docName" class="muted">No doc selected</span>
+    </div>
+    <div class="right">
+      <span id="status" class="muted"></span>
+      <span id="wordCount" class="muted">0 words</span>
+      <button id="btnSettings" title="Settings">Settings</button>
+      <button id="btnSignIn">Sign in with Google</button>
+      <button id="btnSignOut" hidden>Sign out</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <section id="welcome">
+      <h1>Write one line at a time.</h1>
+      <p>Sign in with Google, pick a doc, and type. Your words go straight into that Google Doc.</p>
+      <div class="actions">
+        <button id="btnPick" disabled>Open a Google Doc</button>
+        <button id="btnNew" disabled>Start a new Google Doc</button>
+        <button id="btnLocal">Write without saving to Google</button>
+      </div>
+      <p class="muted small">Draftline only sees docs you open or create here.</p>
+    </section>
+
+    <section id="paper" hidden>
+      <textarea id="editor" spellcheck="true" autocomplete="off" placeholder="Start typing..."></textarea>
+    </section>
+  </main>
+
+  <dialog id="settings">
+    <form method="dialog">
+      <h2>Settings</h2>
+      <label><input type="checkbox" id="optSound" checked> Key sounds</label>
+      <label><input type="checkbox" id="optForward"> Forward-only mode (no backspace, no going back)</label>
+      <label><input type="checkbox" id="optFocus" checked> Fade everything but the current line</label>
+      <label>Theme
+        <select id="optTheme">
+          <option value="dark">Night</option>
+          <option value="light">Paper</option>
+        </select>
+      </label>
+      <label>Font
+        <select id="optFont">
+          <option value="mono">Typewriter</option>
+          <option value="serif">Serif</option>
+          <option value="sans">Sans</option>
+        </select>
+      </label>
+      <label>Autosave every
+        <select id="optSave">
+          <option value="5">5 seconds</option>
+          <option value="15" selected>15 seconds</option>
+          <option value="60">1 minute</option>
+        </select>
+      </label>
+      <menu>
+        <button id="btnSaveNow" type="button">Save to Doc now</button>
+        <button value="close">Close</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
