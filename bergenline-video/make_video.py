@@ -12,7 +12,7 @@ import wave
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 OUT_DIR = Path(__file__).resolve().parent
 W, H = 144, 256          # native pixel canvas
@@ -286,368 +286,6 @@ def make_truck():
 
 TRUCK = make_truck()
 
-# ---------------------------------------------------------------- timeline
-# Everything is timed to the soundtrack of the reference video (reference_audio).
-# Score/coin events below were read frame by frame off that video's HUD, so each
-# action here lands on the same sound effect.
-DURATION = 91.4
-BEAT0, BEAT = 0.07, 60 / 133.5            # measured tempo of the song
-REF_SCORE = [  # (time, points)
-    (3.1, 200), (4.3, 100), (6.7, 200), (7.9, 1000), (9.7, 100), (11.37, 300), (11.5, 100),
-    (11.7, 200), (11.87, 200), (12.03, 200), (12.23, 300), (13.8, 500), (14.1, 500),
-    (20.3, 200), (21.1, 200), (21.7, 200), (22.3, 200), (24.1, 200), (24.4, 200), (24.7, 200),
-    (25.0, 200), (25.3, 200), (25.6, 200), (27.7, 100), (28.3, 100), (31.53, 200), (31.67, 200),
-    (31.77, 300), (31.87, 100), (32.97, 1200), (33.1, 200), (33.2, 200), (34.3, 200), (34.6, 200),
-    (36.4, 200), (37.9, 200), (38.63, 200), (38.9, 300), (39.3, 100), (41.0, 600), (41.33, 300),
-    (42.1, 300), (42.2, 200), (42.3, 200), (42.57, 200), (45.1, 200), (45.7, 50), (46.3, 50),
-    (46.9, 50), (47.5, 50), (47.67, 200), (48.1, 50), (48.63, 200), (48.83, 300), (48.97, 100),
-    (51.7, 100), (52.9, 100), (55.9, 200), (57.7, 100), (60.1, 1000), (60.9, 200), (61.3, 300),
-    (61.7, 100), (62.5, 200), (65.3, 200), (67.3, 2000), (69.3, 1800), (69.7, 200), (79.3, 5000),
-]
-T_RUN = 0.3
-V_BASE, V_BUS, V_HYPER = 34.0, 80.0, 58.0
-TB0, TB1 = 15.4, 19.2                     # bus ride
-TH0, TH1 = 60.1, 70.0                     # cafecito speed mode
-T_FINAL = 78.3                            # leap from the crates to the flagpole
-T_GRAB = 79.3                             # flagpole (5000) in the reference
-
-
-def speed_t(t):
-    if TB0 <= t < TB1:
-        return V_BUS
-    if TH0 <= t < TH1:
-        return V_HYPER
-    return V_BASE
-
-
-_ts = np.arange(0, DURATION + 0.01, 1 / 600)
-_xs = np.empty_like(_ts)
-_x = X0
-for _i, _t in enumerate(_ts):
-    _xs[_i] = _x
-    if T_RUN <= _t < T_FINAL:
-        _x += speed_t(_t) / 600
-TS, XS = _ts, _xs
-X_FINAL = float(np.interp(T_FINAL, TS, XS))
-
-
-def x_of_t(t):
-    return float(np.interp(t, TS, XS))
-
-
-def t_of_x(x):
-    i = np.searchsorted(XS, x)
-    return float(TS[min(i, len(TS) - 1)])
-
-
-POLE_X = int(X_FINAL + 112)
-LEVEL_W = POLE_X + 120
-
-
-# ---------------------------------------------------------------- level art
-# Cross streets from 72nd St (start) to 84th St (finish)
-def _place_crosses():
-    names = ["74 ST", "77 ST", "79 ST", "81 ST", "83 ST"]
-    weights = [3, 11, 6, 4, 6, 2]           # stores per block + 2
-    span = (X_FINAL + 40) - (-10) - 5 * 36
-    avoid = [(10.5, 13.0), (14.8, 15.5), (23.2, 26.4), (53.8, 54.6), (72.9, 74.0)]
-    out, x = [], -10
-    for i, nm in enumerate(names):
-        x += span * weights[i] / sum(weights)
-        cx = x
-        for a, b in avoid:
-            if x_of_t(a) - 36 < cx < x_of_t(b):
-                cx = x_of_t(b) + 2
-        cx = min(cx, x_of_t(75.3) - 40)    # keep 83rd St before the crate stairs
-        out.append((int(cx), nm))
-        x = cx + 36
-    out.append((int(X_FINAL + 40), "84 ST"))
-    return out
-
-
-CROSS = _place_crosses()
-CROSS_W = 36
-
-# Generic placeholder storefronts (blocks with no verified listings)
-GENERIC = [
-    ("PANADERIA", (250, 230, 200), (180, 40, 40), (220, 60, 60), (255, 255, 255), (232, 200, 150)),
-    ("FARMACIA", (255, 255, 255), (20, 140, 70), (20, 140, 70), (255, 255, 255), (170, 190, 210)),
-    ("99 CENT", (255, 220, 0), (200, 20, 20), (230, 40, 40), (255, 220, 0), (180, 80, 60)),
-    ("ENVIOS", (20, 90, 170), (255, 220, 0), (20, 90, 170), (255, 220, 0), (225, 215, 190)),
-    ("CELL FIX", (20, 20, 40), (80, 220, 255), (60, 60, 80), (80, 220, 255), (210, 200, 230)),
-    ("BARBER", (255, 255, 255), (30, 60, 160), (220, 40, 40), (255, 255, 255), (190, 70, 60)),
-    ("PUPUSAS", (40, 80, 180), (255, 255, 255), (40, 80, 180), (255, 255, 255), (230, 230, 220)),
-    ("JOYERIA", (40, 30, 60), (255, 210, 80), (100, 60, 140), (255, 210, 80), (200, 120, 90)),
-    ("OPTICA", (255, 255, 255), (40, 40, 160), (40, 40, 160), (200, 220, 255), (180, 80, 70)),
-    ("ZAPATOS", (230, 60, 120), (255, 255, 255), (230, 60, 120), (255, 255, 255), (230, 230, 220)),
-    ("DELI", (180, 30, 30), (255, 255, 255), (180, 30, 30), (255, 255, 255), (230, 220, 200)),
-    ("LAVANDERIA", (60, 170, 230), (255, 255, 255), (60, 170, 230), (255, 255, 255), (220, 200, 170)),
-    ("PERFUMES", (120, 40, 140), (255, 200, 240), (200, 90, 200), (255, 255, 255), (235, 230, 240)),
-    ("TACOS", (255, 120, 20), (255, 255, 255), (255, 120, 20), (255, 230, 60), (250, 200, 210)),
-    ("CARNICERIA", (255, 255, 255), (170, 30, 30), (170, 30, 30), (255, 255, 255), (215, 190, 160)),
-]
-
-# Real listings, in address order.  "/" splits a sign onto two lines.
-# Real storefronts by block, in address order (list supplied by the user).
-# (sign text, sign bg, sign text color, awning 1, awning 2, facade). "/" = two-line sign.
-REAL_BLOCKS = [
-    [  # 72nd - 74th
-        ("BANANA KING", (255, 220, 30), (30, 110, 50), (255, 220, 30), (30, 110, 50), (230, 220, 200)),           # 7316
-    ],
-    [  # 74th - 77th
-        ("EL CARRETERO", (250, 210, 40), (30, 60, 150), (200, 30, 40), (250, 210, 40), (200, 110, 80)),          # 7412
-        ("SELECTOS/FOODMARKET", (200, 30, 40), (255, 255, 255), (200, 30, 40), (255, 255, 255), (225, 215, 190)),  # 7425
-        ("AL-KARAM/FASHION", (30, 30, 40), (240, 200, 90), (90, 40, 110), (240, 200, 90), (235, 230, 240)),        # 7508
-        ("GANDOLFO/PIZZERIA", (30, 130, 60), (255, 255, 255), (200, 30, 30), (255, 255, 255), (180, 80, 60)),     # 7523
-        ("AMEEN/PHARMACY", (255, 255, 255), (20, 120, 70), (20, 120, 70), (255, 255, 255), (170, 190, 210)),       # 7527
-        ("BOUTIQUE/CAROL", (250, 200, 225), (160, 30, 100), (230, 100, 160), (255, 255, 255), (232, 200, 150)),    # 7551
-        ("LAS CHICAS/BAKERY", (255, 230, 190), (180, 60, 40), (240, 140, 80), (255, 240, 220), (250, 200, 210)),  # 7553
-        ("N B FASHION", (40, 40, 60), (255, 255, 255), (60, 60, 90), (220, 220, 230), (200, 120, 90)),            # 7609
-        ("LATINO AMERICAN/SUPER MARKET", (30, 90, 170), (255, 220, 40), (30, 90, 170), (255, 220, 40), (230, 230, 220)),  # 7620
-    ],
-    [  # 77th - 79th
-        ("CORTADITOS", (250, 240, 220), (120, 60, 30), (120, 60, 30), (250, 240, 220), (200, 110, 80)),          # 7700
-        ("LA KAUSA", (200, 40, 30), (255, 220, 60), (200, 40, 30), (255, 220, 60), (230, 220, 200)),             # 7815
-        ("NOVECKS/PHARMACY", (255, 255, 255), (30, 80, 160), (30, 80, 160), (255, 255, 255), (215, 190, 160)),   # 7823
-        ("LA SORRENTINA", (20, 110, 60), (255, 255, 255), (20, 140, 70), (220, 40, 40), (240, 225, 190)),        # 7831
-    ],
-    [  # 79th - 81st
-        ("TAPAS DE/ESPANA", (200, 30, 30), (255, 215, 40), (200, 30, 30), (255, 215, 40), (232, 200, 150)),      # 7909
-        ("BIRRIA HOUSE/TAQUERIA", (120, 30, 20), (255, 200, 60), (230, 110, 30), (255, 230, 120), (250, 200, 210)),  # 7911
-    ],
-    [  # 81st - 83rd
-        ("HARRY'S", (20, 20, 30), (255, 200, 60), (40, 40, 50), (255, 200, 60), (190, 70, 60)),                  # 8101
-        ("BERGENLINE/SUPERMARKET", (220, 30, 40), (255, 255, 255), (220, 30, 40), (255, 255, 255), (230, 230, 220)),  # 8107
-        ("JIMMY'S/BAKERY", (255, 225, 180), (150, 60, 30), (210, 120, 60), (255, 240, 220), (200, 120, 90)),     # 8125
-        ("EL FENIX/BAKERY III", (30, 60, 140), (255, 200, 60), (230, 120, 30), (255, 220, 120), (225, 215, 190)),  # 8133
-    ],
-    [],  # 83rd - 84th
-]
-MAX_REAL_W = 96
-
-
-LIB_X, LIB_W = POLE_X + 16, 86          # Sai Rao Public Library, 8411 Bergenline
-
-
-def store_min_w(store):
-    return max(44, max(text_w(l) for l in store[0].split("/")) + 8)
-
-
-def draw_building(d, x, w, store, rng):
-    name, sign_bg, sign_fg, aw1, aw2, facade = store
-    nl = len(name.split("/"))
-    sf_h = 30 + 6 * (nl - 1)              # storefront height
-    stories = rng.choice([2, 2, 3])
-    top = GROUND - sf_h - stories * 20 - 4
-    d.rectangle([x, top, x + w - 1, GROUND - 1], fill=facade)
-    shade = tuple(max(0, c - 40) for c in facade)
-    d.rectangle([x, top, x + w - 1, top + 3], fill=shade)
-    d.rectangle([x, top + 4, x + w - 1, top + 4], fill=tuple(min(255, c + 25) for c in facade))
-    d.line([x, top, x, GROUND - 1], fill=shade)
-    if facade[0] > facade[2] + 40 and facade[0] < 210:
-        for by in range(top + 6, GROUND - sf_h, 4):
-            for bx in range(x + ((by // 4) % 2) * 3, x + w - 1, 6):
-                d.point((bx, by), fill=shade)
-    nwin = max(2, (w - 8) // 14)
-    gap = (w - nwin * 8) / (nwin + 1)
-    for s in range(stories):
-        wy = top + 8 + s * 20
-        for i in range(nwin):
-            wx = int(x + gap + i * (8 + gap))
-            d.rectangle([wx - 1, wy - 1, wx + 8, wy + 11], fill=(245, 240, 230))
-            d.rectangle([wx, wy, wx + 7, wy + 10], fill=(70, 110, 160))
-            d.rectangle([wx, wy, wx + 7, wy + 4], fill=(110, 160, 210))
-            d.line([wx + 4, wy, wx + 4, wy + 10], fill=(245, 240, 230))
-            d.rectangle([wx - 2, wy + 11, wx + 9, wy + 12], fill=shade)
-            r = rng.random()
-            if r < 0.2:
-                d.rectangle([wx + 1, wy + 6, wx + 7, wy + 10], fill=(200, 200, 205))
-                d.line([wx + 2, wy + 8, wx + 6, wy + 8], fill=(120, 120, 130))
-            elif r < 0.35:
-                d.rectangle([wx, wy + 9, wx + 7, wy + 10], fill=(150, 80, 40))
-                d.rectangle([wx + 1, wy + 7, wx + 6, wy + 8], fill=(60, 160, 70))
-    sy = GROUND - sf_h
-    d.rectangle([x, sy, x + w - 1, GROUND - 1], fill=(60, 60, 70))
-    bh = 2 + 6 * nl
-    d.rectangle([x + 1, sy, x + w - 2, sy + bh], fill=sign_bg)
-    d.rectangle([x + 1, sy, x + w - 2, sy], fill=(0, 0, 0))
-    ay = sy + bh + 1
-    for i in range(x + 1, x + w - 1):
-        c = aw1 if ((i - x) // 4) % 2 == 0 else aw2
-        d.line([i, ay, i, ay + 4], fill=c)
-        if (i - x) % 4 in (1, 2):
-            d.point((i, ay + 5), fill=c)
-    gy = ay + 7
-    door_x = x + w - 12
-    d.rectangle([x + 3, gy, door_x - 3, GROUND - 3], fill=(150, 210, 240))
-    d.line([x + 5, gy + 9, x + 11, gy + 2], fill=(220, 245, 255))
-    d.line([x + 6, gy + 10, x + 12, gy + 3], fill=(220, 245, 255))
-    d.rectangle([x + 3, GROUND - 6, door_x - 3, GROUND - 3], fill=(90, 90, 100))
-    for gx in range(x + 16, door_x - 5, 6):
-        d.rectangle([gx, GROUND - 9, gx + 3, GROUND - 6], fill=rng.choice(
-            [aw1, aw2, sign_fg, (255, 200, 120)]))
-    d.rectangle([door_x, gy, door_x + 8, GROUND - 1], fill=(40, 40, 45))
-    d.rectangle([door_x + 1, gy + 1, door_x + 7, GROUND - 2], fill=(110, 150, 180))
-    d.point((door_x + 6, gy + 8), fill=(250, 210, 60))
-    return (name, x, w, sy, sign_fg)
-
-
-def draw_library(im, d):
-    x, w = LIB_X, LIB_W
-    stone, dark, trim = (226, 212, 180), (180, 165, 135), (245, 238, 220)
-    top = GROUND - 86
-    d.rectangle([x, top + 10, x + w - 1, GROUND - 1], fill=stone)
-    d.polygon([(x - 2, top + 12), (x + w // 2, top - 6), (x + w + 1, top + 12)], fill=trim)   # pediment
-    d.polygon([(x + 8, top + 10), (x + w // 2, top - 1), (x + w - 9, top + 10)], fill=stone)
-    d.rectangle([x - 2, top + 10, x + w + 1, top + 13], fill=trim)
-    # name plate
-    d.rectangle([x + 4, top + 16, x + w - 5, top + 30], fill=(30, 60, 110))
-    d.rectangle([x + 5, top + 17, x + w - 6, top + 29], outline=(240, 210, 120))
-    draw_text(im, x + (w - text_w("SAI RAO")) // 2, top + 19, "SAI RAO", (255, 230, 150))
-    draw_text(im, x + (w - text_w("PUBLIC LIBRARY")) // 2, top + 24, "PUBLIC LIBRARY", (255, 255, 255))
-    # columns
-    for cx in range(x + 4, x + w - 4, 13):
-        d.rectangle([cx, top + 34, cx + 5, GROUND - 8], fill=trim)
-        d.line([cx + 2, top + 36, cx + 2, GROUND - 10], fill=dark)
-        d.rectangle([cx - 1, top + 33, cx + 6, top + 34], fill=dark)
-    # tall windows between columns
-    for i, wx in enumerate(range(x + 11, x + w - 10, 13)):
-        if abs(wx + 3 - (x + w // 2)) < 8:
-            continue
-        d.rectangle([wx, top + 40, wx + 5, GROUND - 16], fill=(70, 110, 160))
-        d.rectangle([wx, top + 40, wx + 5, top + 46], fill=(120, 170, 220))
-    # door (player walks in here)
-    dx = x + w // 2 - 6
-    d.rectangle([dx, GROUND - 30, dx + 12, GROUND - 8], fill=(90, 50, 30))
-    d.rectangle([dx + 1, GROUND - 29, dx + 5, GROUND - 9], fill=(120, 70, 40))
-    d.rectangle([dx + 7, GROUND - 29, dx + 11, GROUND - 9], fill=(120, 70, 40))
-    # steps
-    for k in range(3):
-        d.rectangle([x - 2 + k * 3, GROUND - 8 + k * 3 - 1, x + w + 1 - k * 3, GROUND - 6 + k * 3 - 1],
-                    fill=trim if k % 2 == 0 else dark)
-    # book cart / plants
-    d.rectangle([x - 8, GROUND - 6, x - 2, GROUND - 1], fill=(150, 80, 40))
-    d.ellipse([x - 9, GROUND - 13, x - 1, GROUND - 5], fill=(50, 150, 70))
-
-
-def build_level():
-    im = Image.new("RGBA", (LEVEL_W, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    rng = random.Random(7)
-    signs = []
-    gi = 0
-    seg_starts = [-10] + [cx + CROSS_W for cx, _ in CROSS[:-1]]
-    seg_ends = [cx for cx, _ in CROSS]
-    for si, (a, b) in enumerate(zip(seg_starts, seg_ends)):
-        L = b - a
-        real = REAL_BLOCKS[si]
-        free = L - sum(min(MAX_REAL_W, store_min_w(r) + 24) for r in real)
-        ngen = max(0, int(free // 56)) if real else max(1, L // 52)
-        stores = []
-        slots = len(real) + 1
-        for k in range(slots):          # spread placeholders evenly between real stores
-            cnt = ngen * (k + 1) // slots - ngen * k // slots
-            for _ in range(cnt):
-                stores.append(GENERIC[gi % len(GENERIC)]); gi += 1
-            if k < len(real):
-                stores.append(real[k])
-        widths = [store_min_w(st) for st in stores]
-        extra = L - sum(widths)
-        assert extra >= 0, f"segment {si} too short by {-extra}px"
-        for k in range(extra):
-            widths[k % len(widths)] += 1
-        x = a
-        for st, w in zip(stores, widths):
-            signs.append(draw_building(d, x, w, st, rng))
-            x += w
-    for name, bx, bw, sy, fg in signs:
-        for li, line in enumerate(name.split("/")):
-            draw_text(im, bx + (bw - text_w(line)) // 2, sy + 2 + li * 6, line, fg)
-
-    # ground
-    d.rectangle([0, GROUND, LEVEL_W, GROUND + 9], fill=(200, 200, 205))
-    for sx in range(0, LEVEL_W, 12):
-        d.line([sx, GROUND, sx, GROUND + 9], fill=(170, 170, 178))
-    d.line([0, GROUND, LEVEL_W, GROUND], fill=(225, 225, 230))
-    d.rectangle([0, GROUND + 10, LEVEL_W, GROUND + 12], fill=(140, 140, 150))
-    d.rectangle([0, GROUND + 13, LEVEL_W, H], fill=(60, 62, 70))
-    for sx in range(0, LEVEL_W, 20):
-        d.rectangle([sx, 236, sx + 10, 237], fill=(250, 210, 40))
-    rng2 = random.Random(3)
-    for _ in range(300):
-        px, py = rng2.randrange(LEVEL_W), rng2.randrange(GROUND + 14, H)
-        d.point((px, py), fill=(75, 77, 86))
-
-    for cx, label in CROSS:
-        d.rectangle([cx, GROUND, cx + CROSS_W - 1, GROUND + 12], fill=(60, 62, 70))
-        for i in range(cx + 2, cx + CROSS_W - 2, 6):
-            d.rectangle([i, GROUND + 1, i + 3, GROUND + 11], fill=(240, 240, 240))
-        px = cx + 3
-        d.rectangle([px, GROUND - 60, px + 1, GROUND], fill=(50, 90, 60))
-        d.rectangle([px - 2, GROUND - 60, px + 24, GROUND - 59], fill=(50, 90, 60))
-        d.rectangle([px + 18, GROUND - 59, px + 24, GROUND - 44], fill=(40, 40, 40))
-        for j, c in enumerate([(230, 40, 40), (240, 190, 30), (50, 200, 80)]):
-            d.rectangle([px + 20, GROUND - 57 + j * 5, px + 22, GROUND - 55 + j * 5],
-                        fill=c if j == 2 else tuple(v // 3 for v in c))
-        d.rectangle([px - 1, GROUND - 52, px + 43, GROUND - 38], fill=(20, 120, 60))
-        d.rectangle([px, GROUND - 51, px + 42, GROUND - 39], outline=(255, 255, 255))
-        draw_text(im, px + 3, GROUND - 49, "BERGENLINE", (255, 255, 255))
-        draw_text(im, px + 2 + (40 - text_w(label)) // 2, GROUND - 43, label, (255, 255, 255))
-
-        # North Bergen banner on the light pole
-        bx, by = px + 2, GROUND - 34
-        d.rectangle([bx, by, bx + 15, by + 9], fill=(170, 30, 35))
-        d.rectangle([bx, by + 10, bx + 15, by + 19], fill=(250, 200, 40))
-        d.polygon([(bx, by + 20), (bx + 15, by + 20), (bx + 7, by + 23)], fill=(250, 200, 40))
-        im.alpha_composite(LOGO_BANNER, (bx + 2, by + 4))
-
-    draw_library(im, d)
-    return im
-
-
-def build_skyline():
-    sw = LEVEL_W // 2 + W
-    im = Image.new("RGBA", (sw, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    rng = random.Random(11)
-    x = 0
-    while x < sw:
-        w = rng.randint(10, 22)
-        h = rng.randint(30, 80)
-        if rng.random() < 0.08:
-            h = rng.randint(95, 115)
-        top = GROUND - h
-        col = (150, 165, 205)
-        d.rectangle([x, top, x + w - 1, GROUND], fill=col)
-        if h > 95:   # spire tower
-            d.polygon([(x + 2, top), (x + w // 2, top - 14), (x + w - 3, top)], fill=col)
-            d.line([x + w // 2, top - 26, x + w // 2, top - 14], fill=col)
-        for wy in range(top + 4, GROUND, 6):
-            for wx in range(x + 2, x + w - 2, 4):
-                if rng.random() < 0.5:
-                    d.point((wx, wy), fill=(185, 200, 235))
-        x += w + rng.randint(0, 4)
-    return im
-
-
-def build_clouds():
-    cw = 600
-    im = Image.new("RGBA", (cw, H), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    rng = random.Random(5)
-    for i in range(7):
-        cx, cy = i * 86 + rng.randint(0, 30), rng.randint(36, 90)
-        w = rng.randint(26, 44)
-        d.rounded_rectangle([cx, cy + 6, cx + w, cy + 14], 4, fill=(255, 255, 255))
-        d.ellipse([cx + 4, cy, cx + w // 2 + 4, cy + 12], fill=(255, 255, 255))
-        d.ellipse([cx + w // 2 - 4, cy + 2, cx + w - 2, cy + 12], fill=(255, 255, 255))
-        d.rectangle([cx + 2, cy + 13, cx + w - 2, cy + 14], fill=(170, 210, 255))
-    return im
-
-
-LEVEL = build_level()
-SKYLINE = build_skyline()
-CLOUDS = build_clouds()
 
 # ---------------------------------------------------------------- extra sprites
 PAL2 = dict(PAL)
@@ -739,18 +377,402 @@ for hc in HYPER_COLS:
     HYPER.append({"run": [recolor(i, PAL["T"][:3], hc) for i in BIG["run"]],
                   "jump": recolor(BIG["jump"], PAL["T"][:3], hc)})
 
-# ---------------------------------------------------------------- choreography
-T_BIG = 7.9                       # pastelito collected (1000 in the reference)
+
+WINDOWS = []
+CROSS_W = 36
+
+# Generic placeholder storefronts (blocks with no verified listings)
+GENERIC = [
+    ("PANADERIA", (250, 230, 200), (180, 40, 40), (220, 60, 60), (255, 255, 255), (232, 200, 150)),
+    ("FARMACIA", (255, 255, 255), (20, 140, 70), (20, 140, 70), (255, 255, 255), (170, 190, 210)),
+    ("99 CENT", (255, 220, 0), (200, 20, 20), (230, 40, 40), (255, 220, 0), (180, 80, 60)),
+    ("ENVIOS", (20, 90, 170), (255, 220, 0), (20, 90, 170), (255, 220, 0), (225, 215, 190)),
+    ("CELL FIX", (20, 20, 40), (80, 220, 255), (60, 60, 80), (80, 220, 255), (210, 200, 230)),
+    ("BARBER", (255, 255, 255), (30, 60, 160), (220, 40, 40), (255, 255, 255), (190, 70, 60)),
+    ("PUPUSAS", (40, 80, 180), (255, 255, 255), (40, 80, 180), (255, 255, 255), (230, 230, 220)),
+    ("JOYERIA", (40, 30, 60), (255, 210, 80), (100, 60, 140), (255, 210, 80), (200, 120, 90)),
+    ("OPTICA", (255, 255, 255), (40, 40, 160), (40, 40, 160), (200, 220, 255), (180, 80, 70)),
+    ("ZAPATOS", (230, 60, 120), (255, 255, 255), (230, 60, 120), (255, 255, 255), (230, 230, 220)),
+    ("DELI", (180, 30, 30), (255, 255, 255), (180, 30, 30), (255, 255, 255), (230, 220, 200)),
+    ("LAVANDERIA", (60, 170, 230), (255, 255, 255), (60, 170, 230), (255, 255, 255), (220, 200, 170)),
+    ("PERFUMES", (120, 40, 140), (255, 200, 240), (200, 90, 200), (255, 255, 255), (235, 230, 240)),
+    ("TACOS", (255, 120, 20), (255, 255, 255), (255, 120, 20), (255, 230, 60), (250, 200, 210)),
+    ("CARNICERIA", (255, 255, 255), (170, 30, 30), (170, 30, 30), (255, 255, 255), (215, 190, 160)),
+]
+
+# Real listings, in address order.  "/" splits a sign onto two lines.
+# Real storefronts by block, in address order (list supplied by the user).
+# (sign text, sign bg, sign text color, awning 1, awning 2, facade). "/" = two-line sign.
+REAL_BLOCKS = [
+    [  # 72nd - 74th
+        ("BANANA KING", (255, 220, 30), (30, 110, 50), (255, 220, 30), (30, 110, 50), (230, 220, 200)),           # 7316
+    ],
+    [  # 74th - 77th
+        ("EL CARRETERO", (250, 210, 40), (30, 60, 150), (200, 30, 40), (250, 210, 40), (200, 110, 80)),          # 7412
+        ("SELECTOS/FOODMARKET", (200, 30, 40), (255, 255, 255), (200, 30, 40), (255, 255, 255), (225, 215, 190)),  # 7425
+        ("AL-KARAM/FASHION", (30, 30, 40), (240, 200, 90), (90, 40, 110), (240, 200, 90), (235, 230, 240)),        # 7508
+        ("GANDOLFO/PIZZERIA", (30, 130, 60), (255, 255, 255), (200, 30, 30), (255, 255, 255), (180, 80, 60)),     # 7523
+        ("AMEEN/PHARMACY", (255, 255, 255), (20, 120, 70), (20, 120, 70), (255, 255, 255), (170, 190, 210)),       # 7527
+        ("BOUTIQUE/CAROL", (250, 200, 225), (160, 30, 100), (230, 100, 160), (255, 255, 255), (232, 200, 150)),    # 7551
+        ("LAS CHICAS/BAKERY", (255, 230, 190), (180, 60, 40), (240, 140, 80), (255, 240, 220), (250, 200, 210)),  # 7553
+        ("N B FASHION", (40, 40, 60), (255, 255, 255), (60, 60, 90), (220, 220, 230), (200, 120, 90)),            # 7609
+        ("LATINO AMERICAN/SUPER MARKET", (30, 90, 170), (255, 220, 40), (30, 90, 170), (255, 220, 40), (230, 230, 220)),  # 7620
+    ],
+    [  # 77th - 79th
+        ("CORTADITOS", (250, 240, 220), (120, 60, 30), (120, 60, 30), (250, 240, 220), (200, 110, 80)),          # 7700
+        ("LA KAUSA", (200, 40, 30), (255, 220, 60), (200, 40, 30), (255, 220, 60), (230, 220, 200)),             # 7815
+        ("NOVECKS/PHARMACY", (255, 255, 255), (30, 80, 160), (30, 80, 160), (255, 255, 255), (215, 190, 160)),   # 7823
+        ("LA SORRENTINA", (20, 110, 60), (255, 255, 255), (20, 140, 70), (220, 40, 40), (240, 225, 190)),        # 7831
+    ],
+    [  # 79th - 81st
+        ("TAPAS DE/ESPANA", (200, 30, 30), (255, 215, 40), (200, 30, 30), (255, 215, 40), (232, 200, 150)),      # 7909
+        ("BIRRIA HOUSE/TAQUERIA", (120, 30, 20), (255, 200, 60), (230, 110, 30), (255, 230, 120), (250, 200, 210)),  # 7911
+    ],
+    [  # 81st - 83rd
+        ("HARRY'S", (20, 20, 30), (255, 200, 60), (40, 40, 50), (255, 200, 60), (190, 70, 60)),                  # 8101
+        ("BERGENLINE/SUPERMARKET", (220, 30, 40), (255, 255, 255), (220, 30, 40), (255, 255, 255), (230, 230, 220)),  # 8107
+        ("JIMMY'S/BAKERY", (255, 225, 180), (150, 60, 30), (210, 120, 60), (255, 240, 220), (200, 120, 90)),     # 8125
+        ("EL FENIX/BAKERY III", (30, 60, 140), (255, 200, 60), (230, 120, 30), (255, 220, 120), (225, 215, 190)),  # 8133
+    ],
+    [],  # 83rd - 84th
+]
+MAX_REAL_W = 96
+
+
+
+
+def store_min_w(store):
+    return max(44, max(text_w(l) for l in store[0].split("/")) + 8)
+
+
+def draw_building(d, x, w, store, rng):
+    name, sign_bg, sign_fg, aw1, aw2, facade = store
+    nl = len(name.split("/"))
+    sf_h = 30 + 6 * (nl - 1)              # storefront height
+    stories = rng.choice([2, 2, 3])
+    top = GROUND - sf_h - stories * 20 - 4
+    d.rectangle([x, top, x + w - 1, GROUND - 1], fill=facade)
+    shade = tuple(max(0, c - 40) for c in facade)
+    d.rectangle([x, top, x + w - 1, top + 3], fill=shade)
+    d.rectangle([x, top + 4, x + w - 1, top + 4], fill=tuple(min(255, c + 25) for c in facade))
+    d.line([x, top, x, GROUND - 1], fill=shade)
+    if facade[0] > facade[2] + 40 and facade[0] < 210:
+        for by in range(top + 6, GROUND - sf_h, 4):
+            for bx in range(x + ((by // 4) % 2) * 3, x + w - 1, 6):
+                d.point((bx, by), fill=shade)
+    nwin = max(2, (w - 8) // 14)
+    gap = (w - nwin * 8) / (nwin + 1)
+    for s in range(stories):
+        wy = top + 8 + s * 20
+        for i in range(nwin):
+            wx = int(x + gap + i * (8 + gap))
+            WINDOWS.append((wx, wy))
+            d.rectangle([wx - 1, wy - 1, wx + 8, wy + 11], fill=(245, 240, 230))
+            d.rectangle([wx, wy, wx + 7, wy + 10], fill=(70, 110, 160))
+            d.rectangle([wx, wy, wx + 7, wy + 4], fill=(110, 160, 210))
+            d.line([wx + 4, wy, wx + 4, wy + 10], fill=(245, 240, 230))
+            d.rectangle([wx - 2, wy + 11, wx + 9, wy + 12], fill=shade)
+            r = rng.random()
+            if r < 0.2:
+                d.rectangle([wx + 1, wy + 6, wx + 7, wy + 10], fill=(200, 200, 205))
+                d.line([wx + 2, wy + 8, wx + 6, wy + 8], fill=(120, 120, 130))
+            elif r < 0.35:
+                d.rectangle([wx, wy + 9, wx + 7, wy + 10], fill=(150, 80, 40))
+                d.rectangle([wx + 1, wy + 7, wx + 6, wy + 8], fill=(60, 160, 70))
+    sy = GROUND - sf_h
+    d.rectangle([x, sy, x + w - 1, GROUND - 1], fill=(60, 60, 70))
+    bh = 2 + 6 * nl
+    d.rectangle([x + 1, sy, x + w - 2, sy + bh], fill=sign_bg)
+    d.rectangle([x + 1, sy, x + w - 2, sy], fill=(0, 0, 0))
+    ay = sy + bh + 1
+    for i in range(x + 1, x + w - 1):
+        c = aw1 if ((i - x) // 4) % 2 == 0 else aw2
+        d.line([i, ay, i, ay + 4], fill=c)
+        if (i - x) % 4 in (1, 2):
+            d.point((i, ay + 5), fill=c)
+    gy = ay + 7
+    door_x = x + w - 12
+    d.rectangle([x + 3, gy, door_x - 3, GROUND - 3], fill=(150, 210, 240))
+    d.line([x + 5, gy + 9, x + 11, gy + 2], fill=(220, 245, 255))
+    d.line([x + 6, gy + 10, x + 12, gy + 3], fill=(220, 245, 255))
+    d.rectangle([x + 3, GROUND - 6, door_x - 3, GROUND - 3], fill=(90, 90, 100))
+    for gx in range(x + 16, door_x - 5, 6):
+        d.rectangle([gx, GROUND - 9, gx + 3, GROUND - 6], fill=rng.choice(
+            [aw1, aw2, sign_fg, (255, 200, 120)]))
+    d.rectangle([door_x, gy, door_x + 8, GROUND - 1], fill=(40, 40, 45))
+    d.rectangle([door_x + 1, gy + 1, door_x + 7, GROUND - 2], fill=(110, 150, 180))
+    d.point((door_x + 6, gy + 8), fill=(250, 210, 60))
+    return (name, x, w, sy, sign_fg)
+
+
+def draw_library(im, d):
+    x, w = LIB_X, LIB_W
+    stone, dark, trim = (226, 212, 180), (180, 165, 135), (245, 238, 220)
+    top = GROUND - 86
+    d.rectangle([x, top + 10, x + w - 1, GROUND - 1], fill=stone)
+    d.polygon([(x - 2, top + 12), (x + w // 2, top - 6), (x + w + 1, top + 12)], fill=trim)   # pediment
+    d.polygon([(x + 8, top + 10), (x + w // 2, top - 1), (x + w - 9, top + 10)], fill=stone)
+    d.rectangle([x - 2, top + 10, x + w + 1, top + 13], fill=trim)
+    # name plate
+    d.rectangle([x + 4, top + 16, x + w - 5, top + 30], fill=(30, 60, 110))
+    d.rectangle([x + 5, top + 17, x + w - 6, top + 29], outline=(240, 210, 120))
+    draw_text(im, x + (w - text_w("SAI RAO")) // 2, top + 19, "SAI RAO", (255, 230, 150))
+    draw_text(im, x + (w - text_w("PUBLIC LIBRARY")) // 2, top + 24, "PUBLIC LIBRARY", (255, 255, 255))
+    # columns
+    for cx in range(x + 4, x + w - 4, 13):
+        d.rectangle([cx, top + 34, cx + 5, GROUND - 8], fill=trim)
+        d.line([cx + 2, top + 36, cx + 2, GROUND - 10], fill=dark)
+        d.rectangle([cx - 1, top + 33, cx + 6, top + 34], fill=dark)
+    # tall windows between columns
+    for i, wx in enumerate(range(x + 11, x + w - 10, 13)):
+        if abs(wx + 3 - (x + w // 2)) < 8:
+            continue
+        d.rectangle([wx, top + 40, wx + 5, GROUND - 16], fill=(70, 110, 160))
+        d.rectangle([wx, top + 40, wx + 5, top + 46], fill=(120, 170, 220))
+    # door (player walks in here)
+    dx = x + w // 2 - 6
+    d.rectangle([dx, GROUND - 30, dx + 12, GROUND - 8], fill=(90, 50, 30))
+    d.rectangle([dx + 1, GROUND - 29, dx + 5, GROUND - 9], fill=(120, 70, 40))
+    d.rectangle([dx + 7, GROUND - 29, dx + 11, GROUND - 9], fill=(120, 70, 40))
+    # steps
+    for k in range(3):
+        d.rectangle([x - 2 + k * 3, GROUND - 8 + k * 3 - 1, x + w + 1 - k * 3, GROUND - 6 + k * 3 - 1],
+                    fill=trim if k % 2 == 0 else dark)
+    # book cart / plants
+    d.rectangle([x - 8, GROUND - 6, x - 2, GROUND - 1], fill=(150, 80, 40))
+    d.ellipse([x - 9, GROUND - 13, x - 1, GROUND - 5], fill=(50, 150, 70))
+
+
+
+def build_skyline():
+    sw = LEVEL_W // 2 + W
+    im = Image.new("RGBA", (sw, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    rng = random.Random(11)
+    x = 0
+    while x < sw:
+        w = rng.randint(10, 22)
+        h = rng.randint(30, 80)
+        if rng.random() < 0.08:
+            h = rng.randint(95, 115)
+        top = GROUND - h
+        col = (150, 165, 205)
+        d.rectangle([x, top, x + w - 1, GROUND], fill=col)
+        if h > 95:   # spire tower
+            d.polygon([(x + 2, top), (x + w // 2, top - 14), (x + w - 3, top)], fill=col)
+            d.line([x + w // 2, top - 26, x + w // 2, top - 14], fill=col)
+        for wy in range(top + 4, GROUND, 6):
+            for wx in range(x + 2, x + w - 2, 4):
+                if rng.random() < 0.5:
+                    d.point((wx, wy), fill=(185, 200, 235))
+        x += w + rng.randint(0, 4)
+    return im
+
+
+def build_clouds():
+    cw = 600
+    im = Image.new("RGBA", (cw, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    rng = random.Random(5)
+    for i in range(7):
+        cx, cy = i * 86 + rng.randint(0, 30), rng.randint(36, 90)
+        w = rng.randint(26, 44)
+        d.rounded_rectangle([cx, cy + 6, cx + w, cy + 14], 4, fill=(255, 255, 255))
+        d.ellipse([cx + 4, cy, cx + w // 2 + 4, cy + 12], fill=(255, 255, 255))
+        d.ellipse([cx + w // 2 - 4, cy + 2, cx + w - 2, cy + 12], fill=(255, 255, 255))
+        d.rectangle([cx + 2, cy + 13, cx + w - 2, cy + 14], fill=(170, 210, 255))
+    return im
+
+
+
+# ---------------------------------------------------------------- new sprites
+PAL3 = dict(PAL2)
+PAL3.update({"b": (120, 95, 70, 255), "B": (165, 140, 110, 255), "g": (40, 140, 60, 255),
+             "P": (240, 110, 170, 255), "Y": (255, 225, 90, 255), "W": (250, 250, 250, 255)})
+GOOSE = [
+    sprite(["...KK.........", "..KWKK........", "..KKK.........", "...KK.........", "...KK.........",
+            "...KKbbbbb....", "..bbbbbbbbbb..", ".bbbbbbbbbbbb.", ".bbBBbbbbbbbb.", "..bbbbbbbbbb..",
+            "....K....K....", "...KK...KK...."], PAL3),
+    sprite(["..............", "...KK.........", "..KWKK........", "..KKK.........", "...KK.........",
+            "...KKbbbbb....", "..bbbbbbbbbb..", ".bbbbbbbbbbbb.", ".bbBBbbbbbbbb.", "..bbbbbbbbbb..",
+            "...K......K...", "..KK.....KK..."], PAL3),
+]
+DUCK = [
+    sprite([".gg.......", "YgEg......", ".gg.......", "..gg......", ".bbbbbbb..", "bbbbbbbbb.",
+            ".bbbbbbb..", "..O...O..."], PAL3),
+    sprite([".gg.......", "YgEg......", ".gg.......", "..gg......", ".bbbbbbb..", "bbbbbbbbb.",
+            ".bbbbbbb..", "...O.O...."], PAL3),
+]
+BATIDO = sprite(["....P..", "...P...", "..P....", "WWWWWWW", "WYYYYYW", ".YYYYY.", ".YYYYY.",
+                 ".YYYYY.", "..YYY..", "..YYY..", ".WWWWW."], PAL3)
+
+
+def make_pipe():
+    im = Image.new("RGBA", (28, 20), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rectangle([2, 7, 25, 19], fill=(40, 160, 60), outline=(15, 70, 25))
+    d.rectangle([5, 8, 7, 19], fill=(140, 230, 140))
+    d.rectangle([0, 0, 27, 7], fill=(50, 180, 70), outline=(15, 70, 25))
+    d.rectangle([3, 1, 5, 6], fill=(150, 235, 150))
+    return im
+
+
+PIPE = make_pipe()
+
+
+def make_net():
+    im = Image.new("RGBA", (26, 13), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for x in range(2, 24, 3):
+        d.line([x, 3, x, 12], fill=(60, 60, 70))
+    for y in range(4, 13, 3):
+        d.line([2, y, 23, y], fill=(60, 60, 70))
+    d.rectangle([1, 1, 24, 2], fill=(255, 255, 255))
+    d.rectangle([0, 0, 1, 12], fill=(40, 110, 60))
+    d.rectangle([24, 0, 25, 12], fill=(40, 110, 60))
+    return im
+
+
+NET = make_net()
+
+
+def make_cone():
+    im = Image.new("RGBA", (7, 9), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.polygon([(3, 0), (6, 7), (0, 7)], fill=(255, 120, 20))
+    d.line([1, 4, 5, 4], fill=(255, 255, 255))
+    d.rectangle([0, 7, 6, 8], fill=(255, 120, 20))
+    return im
+
+
+CONE = make_cone()
+
+
+def make_glove():
+    im = Image.new("RGBA", (10, 10), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.ellipse([0, 0, 9, 7], fill=(210, 30, 30))
+    d.ellipse([0, 1, 4, 5], fill=(240, 70, 70))
+    d.rectangle([2, 6, 8, 9], fill=(250, 250, 250))
+    return im
+
+
+GLOVE = make_glove()
+
+
+def make_train():
+    im = Image.new("RGBA", (186, 34), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    for c in range(3):
+        x = c * 62
+        d.rounded_rectangle([x, 2, x + 59, 30], 4, fill=(205, 210, 220), outline=(90, 95, 110))
+        d.rectangle([x + 1, 20, x + 58, 23], fill=(30, 90, 170))
+        for w in range(5):
+            d.rectangle([x + 4 + w * 11, 7, x + 11 + w * 11, 15], fill=(50, 70, 100))
+            d.point((x + 5 + w * 11, 8), fill=(160, 200, 240))
+        for wx in (x + 8, x + 44):
+            d.ellipse([wx, 27, wx + 7, 33], fill=(30, 30, 35))
+    d.polygon([(0, 30), (0, 10), (6, 2), (8, 2), (8, 30)], fill=(205, 210, 220))
+    d.rectangle([1, 12, 5, 17], fill=(50, 70, 100))
+    d.rectangle([0, 24, 2, 26], fill=(255, 240, 150))
+    draw_text(im, 70, 25, "LIGHT RAIL", (255, 255, 255))
+    d.line([62, 0, 70, -4], fill=(60, 60, 60))
+    return im
+
+
+TRAIN = make_train()
+CAR_R = make_car((200, 40, 40))
+CAR_B = make_car((50, 90, 190))
+
+# ---------------------------------------------------------------- timeline
+# Every point-scoring moment below was read frame by frame off the reference
+# video's HUD, so each action lands on the matching sound in its soundtrack.
+DURATION = 91.4
+BEAT0, BEAT = 0.07, 60 / 133.5
+REF_SCORE = [
+    (3.1, 200), (4.3, 100), (6.7, 200), (7.9, 1000), (9.7, 100), (11.37, 300), (11.5, 100),
+    (11.7, 200), (11.87, 200), (12.03, 200), (12.23, 300), (13.8, 500), (14.1, 500),
+    (20.3, 200), (21.1, 200), (21.7, 200), (22.3, 200), (24.1, 200), (24.4, 200), (24.7, 200),
+    (25.0, 200), (25.3, 200), (25.6, 200), (27.7, 100), (28.3, 100), (31.53, 200), (31.67, 200),
+    (31.77, 300), (31.87, 100), (32.97, 1200), (33.1, 200), (33.2, 200), (34.3, 200), (34.6, 200),
+    (36.4, 200), (37.9, 200), (38.63, 200), (38.9, 300), (39.3, 100), (41.0, 600), (41.33, 300),
+    (42.1, 300), (42.2, 200), (42.3, 200), (42.57, 200), (45.1, 200), (45.7, 50), (46.3, 50),
+    (46.9, 50), (47.5, 50), (47.67, 200), (48.1, 50), (48.63, 200), (48.83, 300), (48.97, 100),
+    (51.7, 100), (52.9, 100), (55.9, 200), (57.7, 100), (60.1, 1000), (60.9, 200), (61.3, 300),
+    (61.7, 100), (62.5, 200), (65.3, 200), (67.3, 2000), (69.3, 1800), (69.7, 200), (79.3, 5000),
+]
+T_RUN = 1.4                                # after the PRESS START screen
+V_BASE, V_BUS, V_HYPER = 34.0, 80.0, 58.0
+BUS_V = 50.0                               # buses move slower than the kid riding them
+TB0, TB1 = 15.4, 19.2
+TH0, TH1 = 60.1, 70.0
+T_HIT = 50.6                               # runaway cart: shrink
+T_FINAL, T_GRAB = 78.3, 79.3
+PIPE_JUMP = 240                            # x skipped while the screen is black
+# pipe = land on top, sink done, black ends, rise done
+PIPES = [dict(land=43.0, sunk=43.35, black=44.05, up=44.4, world=2),
+         dict(land=53.4, sunk=53.7, black=54.45, up=54.85, world=3),
+         dict(land=70.4, sunk=70.75, black=71.45, up=71.85, world=4)]
+WORLD_CARDS = {2: ("WORLD 1-2", "TONNELLE AVE", "LIGHT RAIL TUNNEL"),
+               3: ("WORLD 1-3", "BRADDOCK PARK", "WOODCLIFF LAKE"),
+               4: ("WORLD 1-4", "BACK ON", "BERGENLINE AVE")}
+
+
+def speed_t(t):
+    for p in PIPES:
+        if p["land"] <= t < p["up"]:
+            return 0.0
+    if TB0 <= t < TB1:
+        return V_BUS
+    if TH0 <= t < TH1:
+        return V_HYPER
+    return V_BASE
+
+
+_ts = np.arange(0, DURATION + 0.01, 1 / 600)
+_xs = np.empty_like(_ts)
+_x = X0
+_jumped = set()
+for _i, _t in enumerate(_ts):
+    for _k, _p in enumerate(PIPES):
+        if _t >= (_p["sunk"] + _p["black"]) / 2 and _k not in _jumped:
+            _jumped.add(_k); _x += PIPE_JUMP
+    _xs[_i] = _x
+    if T_RUN <= _t < T_FINAL:
+        _x += speed_t(_t) / 600
+TS, XS = _ts, _xs
+X_FINAL = float(np.interp(T_FINAL, TS, XS))
+
+
+def x_of_t(t):
+    return float(np.interp(t, TS, XS))
+
+
+def world_at(t):
+    w = 1
+    for p in PIPES:
+        if t >= (p["sunk"] + p["black"]) / 2:
+            w = p["world"]
+    return w
+
+
+POLE_X = int(X_FINAL + 112)
+LEVEL_W = POLE_X + 120
+LIB_X, LIB_W = POLE_X + 16, 86
+# x ranges of each world's strip
+WR = {1: (-10, x_of_t(PIPES[0]["land"]) + 110),
+      2: (x_of_t(PIPES[0]["up"]) - 70, x_of_t(PIPES[1]["land"]) + 110),
+      3: (x_of_t(PIPES[1]["up"]) - 70, x_of_t(PIPES[2]["land"]) + 110),
+      4: (x_of_t(PIPES[2]["up"]) - 70, LEVEL_W)}
+
+T_BIG = 7.9
 T_POWER_HIT = 6.7
 T_PINATA, T_CAFE = 57.7, TH0
-X_BIG = x_of_t(T_BIG)
-XB0, XB1 = x_of_t(TB0), x_of_t(TB1)
-XH0, XH1 = x_of_t(TH0), x_of_t(TH1)
-ROOF = -8                          # bus roof height (bus drawn at y=204)
+ROOF = -8
 
 
 def kid_big_t(t):
-    return t >= T_BIG
+    return (T_BIG <= t < T_HIT) or t >= T_CAFE
 
 
 def KW_t(t):
@@ -761,13 +783,227 @@ def KH_t(t):
     return 24 if kid_big_t(t) else 16
 
 
-moves = []        # x-domain jumps
-coins = []        # dict(x, hb, t)
-blocks = []       # dict(x, y, kind, t)
-enemies = []      # dict(kind, x, mode, t)
-hydrants, carts, cellars, ledges, sheds = [], [], [], [], []
-brick_rows = []
-steps = []
+def _place_crosses():
+    """74th-83rd St signs inside World 1-1; busier blocks get more room."""
+    names = ["74 ST", "77 ST", "79 ST", "81 ST", "83 ST"]
+    weights = [2.2, 10.5, 5, 3, 5]
+    end = x_of_t(41.2)
+    span = end - (-10) - 5 * 36
+    avoid = [(10.5, 13.0), (14.8, 15.5), (23.2, 26.4)]
+    out, x = [], -10
+    for i, nm in enumerate(names):
+        x += span * weights[i] / sum(weights)
+        cx = x
+        for a, b in avoid:
+            if x_of_t(a) - 36 < cx < x_of_t(b):
+                cx = x_of_t(b) + 2
+        out.append((int(cx), nm))
+        x = cx + 36
+    out.append((int(X_FINAL + 40), "84 ST"))
+    return out
+
+
+CROSS = _place_crosses()
+
+
+# ---------------------------------------------------------------- level strips
+def street_ground(d, a, b):
+    d.rectangle([a, GROUND, b, GROUND + 9], fill=(200, 200, 205))
+    for sx in range(int(a) - int(a) % 12, int(b), 12):
+        d.line([sx, GROUND, sx, GROUND + 9], fill=(170, 170, 178))
+    d.line([a, GROUND, b, GROUND], fill=(225, 225, 230))
+    d.rectangle([a, GROUND + 10, b, GROUND + 12], fill=(140, 140, 150))
+    d.rectangle([a, GROUND + 13, b, H], fill=(60, 62, 70))
+    for sx in range(int(a) - int(a) % 20, int(b), 20):
+        d.rectangle([sx, 236, sx + 10, 237], fill=(250, 210, 40))
+
+
+def fill_stores(d, a, b, real, rng, gi):
+    a, b = int(a), int(b)
+    L = b - a
+    signs = []
+    free = L - sum(min(MAX_REAL_W, store_min_w(r) + 24) for r in real)
+    ngen = max(0, int(free // 56)) if real else max(1, L // 52)
+    stores = []
+    slots = len(real) + 1
+    for k in range(slots):
+        cnt = ngen * (k + 1) // slots - ngen * k // slots
+        for _ in range(cnt):
+            stores.append(GENERIC[gi % len(GENERIC)]); gi += 1
+        if k < len(real):
+            stores.append(real[k])
+    if not stores:
+        return signs, gi
+    widths = [store_min_w(st) for st in stores]
+    extra = L - sum(widths)
+    while extra < 0 and len(stores) > len(real):     # drop placeholders that don't fit
+        for i, st in enumerate(stores):
+            if st not in real:
+                del stores[i]; del widths[i]; break
+        extra = L - sum(widths)
+    for k in range(max(0, extra)):
+        widths[k % len(widths)] += 1
+    x = a
+    for st, w in zip(stores, widths):
+        signs.append(draw_building(d, x, w, st, rng))
+        x += w
+    return signs, gi
+
+
+def draw_cross(im, d, cx, label):
+    d.rectangle([cx, GROUND, cx + CROSS_W - 1, GROUND + 12], fill=(60, 62, 70))
+    for i in range(cx + 2, cx + CROSS_W - 2, 6):
+        d.rectangle([i, GROUND + 1, i + 3, GROUND + 11], fill=(240, 240, 240))
+    px = cx + 3
+    d.rectangle([px, GROUND - 60, px + 1, GROUND], fill=(50, 90, 60))
+    d.rectangle([px - 2, GROUND - 60, px + 24, GROUND - 59], fill=(50, 90, 60))
+    d.rectangle([px + 18, GROUND - 59, px + 24, GROUND - 44], fill=(40, 40, 40))
+    for j, c in enumerate([(230, 40, 40), (240, 190, 30), (50, 200, 80)]):
+        d.rectangle([px + 20, GROUND - 57 + j * 5, px + 22, GROUND - 55 + j * 5],
+                    fill=c if j == 2 else tuple(v // 3 for v in c))
+    d.rectangle([px - 1, GROUND - 52, px + 43, GROUND - 38], fill=(20, 120, 60))
+    d.rectangle([px, GROUND - 51, px + 42, GROUND - 39], outline=(255, 255, 255))
+    draw_text(im, px + 3, GROUND - 49, "BERGENLINE", (255, 255, 255))
+    draw_text(im, px + 2 + (40 - text_w(label)) // 2, GROUND - 43, label, (255, 255, 255))
+    bx, by = px + 2, GROUND - 34
+    d.rectangle([bx, by, bx + 15, by + 9], fill=(170, 30, 35))
+    d.rectangle([bx, by + 10, bx + 15, by + 19], fill=(250, 200, 40))
+    d.polygon([(bx, by + 20), (bx + 15, by + 20), (bx + 7, by + 23)], fill=(250, 200, 40))
+    im.alpha_composite(LOGO_BANNER, (bx + 2, by + 4))
+
+
+def draw_underground(im, d, a, b):
+    a, b = int(a), int(b)
+    d.rectangle([a, 0, b, H], fill=(14, 16, 40))
+    # ceiling bricks
+    for y in range(28, 46, 6):
+        for x in range(a - (y // 6 % 2) * 6, b, 12):
+            d.rectangle([x + 1, y + 1, x + 10, y + 5], fill=(60, 70, 120))
+    # subway tile wall
+    for y in range(50, 150, 4):
+        for x in range(a + (y // 4 % 2) * 3, b, 7):
+            d.rectangle([x, y, x + 5, y + 2], fill=(34, 44, 96))
+    d.rectangle([a, 112, b, 116], fill=(200, 160, 40))           # tile stripe
+    # station signs and lamps
+    for x in range(a + 40, b - 60, 150):
+        d.rectangle([x, 70, x + 58, 84], fill=(20, 60, 140), outline=(230, 230, 240))
+        draw_text(im, x + (58 - text_w("TONNELLE AVE")) // 2, 72, "TONNELLE AVE", (255, 255, 255))
+        draw_text(im, x + (58 - text_w("LIGHT RAIL")) // 2, 78, "LIGHT RAIL", (250, 210, 60))
+        d.rectangle([x + 90, 46, x + 91, 54], fill=(90, 90, 100))
+        d.ellipse([x + 86, 54, x + 95, 60], fill=(255, 230, 140))
+    # track bed
+    d.rectangle([a, 150, b, GROUND - 1], fill=(8, 8, 20))
+    d.line([a, 186, b, 186], fill=(120, 120, 140))
+    d.line([a, 190, b, 190], fill=(120, 120, 140))
+    for x in range(a - a % 8, b, 8):
+        d.rectangle([x, 191, x + 4, 193], fill=(60, 45, 35))
+    # platform floor
+    d.rectangle([a, GROUND, b, H], fill=(40, 44, 70))
+    d.rectangle([a, GROUND, b, GROUND + 2], fill=(230, 200, 60))       # yellow platform edge
+    for y in range(GROUND + 4, H, 6):
+        for x in range(a - (y // 6 % 2) * 6, b, 12):
+            d.rectangle([x + 1, y + 1, x + 10, y + 4], fill=(56, 62, 96))
+
+
+def draw_park(im, d, a, b, rng):
+    a, b = int(a), int(b)
+    # hills
+    for x in range(a - 40, b, 70):
+        hh = rng.randint(30, 60)
+        d.ellipse([x, GROUND - hh, x + 110, GROUND + hh], fill=(110, 190, 110))
+        d.ellipse([x + 20, GROUND - hh + 6, x + 70, GROUND - hh + 20], fill=(140, 210, 130))
+    # trees
+    for x in range(a + 10, b, 34):
+        if rng.random() < 0.8:
+            th = rng.randint(44, 70)
+            d.rectangle([x + 6, GROUND - th + 20, x + 9, GROUND - 1], fill=(100, 65, 35))
+            d.ellipse([x - 6, GROUND - th, x + 22, GROUND - th + 30], fill=(40, 130, 60))
+            d.ellipse([x - 1, GROUND - th + 4, x + 14, GROUND - th + 18], fill=(70, 170, 80))
+    # grass path
+    d.rectangle([a, GROUND, b, GROUND + 9], fill=(90, 170, 70))
+    d.rectangle([a, GROUND, b, GROUND + 1], fill=(130, 210, 100))
+    d.rectangle([a, GROUND + 6, b, GROUND + 9], fill=(150, 110, 70))
+    # Woodcliff Lake
+    d.rectangle([a, GROUND + 10, b, H], fill=(50, 120, 190))
+    for y in range(GROUND + 16, H, 7):
+        for x in range(a + (y * 7) % 23, b, 23):
+            d.line([x, y, x + 6, y], fill=(110, 170, 230))
+    # entrance arch
+    gx = int(x_of_t(PIPES[1]["up"]) + 40)
+    for gpx in (gx - 4, gx + 36):
+        d.rectangle([gpx, GROUND - 44, gpx + 7, GROUND - 1], fill=(170, 80, 60))
+        d.rectangle([gpx - 1, GROUND - 47, gpx + 8, GROUND - 44], fill=(200, 190, 170))
+    d.rectangle([gx - 5, GROUND - 62, gx + 44, GROUND - 47], fill=(30, 90, 50))
+    d.rectangle([gx - 4, GROUND - 61, gx + 43, GROUND - 48], outline=(240, 220, 140))
+    draw_text(im, gx + 20 - text_w("BRADDOCK") // 2, GROUND - 59, "BRADDOCK", (255, 240, 180))
+    draw_text(im, gx + 20 - text_w("PARK") // 2, GROUND - 53, "PARK", (255, 240, 180))
+    # lake sign
+    lx = int(x_of_t(58.4))
+    d.rectangle([lx + 18, GROUND - 22, lx + 19, GROUND], fill=(100, 65, 35))
+    d.rectangle([lx, GROUND - 30, lx + 37, GROUND - 18], fill=(110, 70, 40), outline=(60, 35, 20))
+    draw_text(im, lx + 2, GROUND - 28, "WOODCLIFF", (255, 240, 200))
+    draw_text(im, lx + 10, GROUND - 23, "LAKE", (255, 240, 200))
+    # checkpoint banner: Cinderella Man
+    cx = int(x_of_t(64.6))
+    d.rectangle([cx, GROUND - 70, cx + 1, GROUND - 1], fill=(200, 200, 210))
+    d.rectangle([cx + 2, GROUND - 70, cx + 50, GROUND - 50], fill=(140, 20, 30), outline=(250, 200, 60))
+    draw_text(im, cx + 5, GROUND - 67, "CINDERELLA", (255, 230, 120))
+    draw_text(im, cx + 18, GROUND - 61, "MAN", (255, 230, 120))
+    im.alpha_composite(GLOVE, (cx + 6, GROUND - 62))
+    im.alpha_composite(GLOVE.transpose(Image.FLIP_LEFT_RIGHT), (cx + 36, GROUND - 62))
+    draw_text(im, cx + 5, GROUND - 55, "CHECKPOINT", (255, 255, 255))
+
+
+def build_level():
+    im = Image.new("RGBA", (LEVEL_W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    rng = random.Random(7)
+    signs, gi = [], 0
+    # World 1-1 and 1-4: Bergenline Avenue
+    a1, b1 = WR[1]
+    crosses_1 = [c for c in CROSS if c[0] < b1]
+    starts = [a1] + [cx + CROSS_W for cx, _ in crosses_1]
+    ends = [cx for cx, _ in crosses_1] + [b1]
+    for si, (a, b) in enumerate(zip(starts, ends)):
+        real = REAL_BLOCKS[si] if si < 5 else []
+        s, gi = fill_stores(d, a, b, real, rng, gi)
+        signs += s
+    a4, _ = WR[4]
+    s, gi = fill_stores(d, a4, X_FINAL + 40, [], rng, gi)
+    signs += s
+    for name, bx, bw, sy, fg in signs:
+        for li, line in enumerate(name.split("/")):
+            draw_text(im, bx + (bw - text_w(line)) // 2, sy + 2 + li * 6, line, fg)
+    street_ground(d, a1, b1)
+    street_ground(d, a4, LEVEL_W)
+    for cx, label in CROSS:
+        draw_cross(im, d, cx, label)
+    draw_library(im, d)
+    draw_underground(im, d, *WR[2])
+    draw_park(im, d, *WR[3], random.Random(3))
+    return im
+
+
+LEVEL = build_level()
+SKYLINE = build_skyline()
+CLOUDS = build_clouds()
+
+
+def _lit_skyline():
+    a = np.array(SKYLINE)
+    m = (a[:, :, 0] == 185) & (a[:, :, 1] == 200) & (a[:, :, 2] == 235)
+    b = a.copy()
+    b[:, :, :3] = (b[:, :, :3] * 0.45).astype(np.uint8)
+    b[m, :3] = (255, 220, 120)
+    return Image.fromarray(b)
+
+
+SKYLINE_NIGHT = _lit_skyline()
+
+# ---------------------------------------------------------------- choreography
+moves, coins, blocks, enemies = [], [], [], []
+hydrants, carts, cellars, ledges, sheds, nets = [], [], [], [], [], []
+brick_rows, steps, labels = [], [], []
 
 
 def mv_t(t0, t1, h0, h1, apex):
@@ -791,19 +1027,20 @@ def move_h(m, x):
 
 
 def peak(tp, kind=None, h=0, apex=None, dur=0.56):
-    """jump whose top is at time tp; optional block hit there"""
     apex = apex if apex is not None else h + 38
     m = mv_t(tp - dur / 2, tp + dur / 2, h, h, apex)
     if kind:
         xp = x_of_t(tp)
-        blocks.append(dict(x=xp + KW_t(tp) / 2 - 6, y=int(GROUND - (apex + KH_t(tp)) - 12),
-                           kind=kind, t=tp))
+        blocks.append(dict(x=xp + KW_t(tp) / 2 - 6, y=int(GROUND - (apex + KH_t(tp)) - 12), kind=kind, t=tp))
     return m
 
 
 def land_on(tl, kind, h=0, dur=0.55, apex=None):
-    """jump that lands on an enemy at time tl"""
     mv_t(tl - dur, tl, h, h, apex if apex is not None else h + 28)
+    stomp_at(tl, kind)
+
+
+def stomp_at(tl, kind):
     xl = x_of_t(tl)
     ew = 10 if kind == "pigeon" else 12
     enemies.append(dict(kind=kind, x=xl + KW_t(tl) / 2 - ew / 2, mode="stomp", t=tl))
@@ -815,11 +1052,10 @@ def knock(t, kind):
 
 def coin_t(*ts):
     for t in ts:
-        coins.append(dict(t=t))      # placed after all moves exist
+        coins.append(dict(t=t))
 
 
 def over(tp, what, apex=36, dur=0.6):
-    """filler jump over a street obstacle, top on a beat"""
     tp = BEAT0 + round((tp - BEAT0) / BEAT) * BEAT
     mv_t(tp - dur / 2, tp + dur / 2, 0, 0, apex)
     xc = x_of_t(tp) + KW_t(tp) / 2
@@ -827,30 +1063,37 @@ def over(tp, what, apex=36, dur=0.6):
         hydrants.append(xc - 4)
     elif what == "cart":
         carts.append((tp, xc))
-    elif what == "cellar":
+    elif what in ("cellar", "pothole"):
         cellars.append((xc - 12, xc + 12))
+    elif what == "net":
+        nets.append(xc - 13)
 
 
-# ---- 72nd -> 74th
-over(1.6, "hydrant")
-peak(3.1, "coin")                                   # 200 + coin
-land_on(4.3, "pigeon")                              # 100
-over(5.3, "cart", 34, 0.56)
-peak(T_POWER_HIT, "pastelito")                      # block -> pastelito, grab at 7.9
+def label(t, text, col=(255, 230, 90)):
+    labels.append((t, text, col))
+
+
+# ---- WORLD 1-1: Bergenline Ave, 72nd -> 83rd
+over(5.3, "pothole", 34, 0.56)
+peak(3.1, "coin")
+land_on(4.3, "pigeon")
+peak(T_POWER_HIT, "batido")
+label(T_POWER_HIT, "BANANA KING BATIDO!")
+label(T_BIG, "SUPER SIZE!")
 land_on(9.7, "rat")
-mv_t(10.55, 11.05, 0, 30, 44)                       # up onto the brick ledge
+mv_t(10.55, 11.05, 0, 30, 44)
 coin_t(11.37, 11.5, 11.7, 11.87, 12.03, 12.23)
 mv_t(12.45, 12.95, 30, 0, 40)
 ledges.append((x_of_t(10.95) - 4, x_of_t(12.5) + 18, 30))
-land_on(13.8, "pigeon")                             # 500
-land_on(14.1, "pigeon", dur=0.3, apex=14)           # 500 bounce
-# ---- bus ride
+land_on(13.8, "pigeon")
+land_on(14.1, "pigeon", dur=0.3, apex=14)
+# two jitneys back to back
 mv_t(14.9, TB0, 0, ROOF, 10)
-mv_t(16.95, 17.45, ROOF, ROOF, ROOF + 20)
+mv_t(17.1, 17.9, ROOF, ROOF, ROOF + 22)
 mv_t(TB1, 19.65, ROOF, 0, 6)
+label(15.4, "JITNEY HOP!")
 land_on(20.3, "rat")
 peak(21.1, "coin", dur=0.52); peak(21.7, "coin", dur=0.52); peak(22.3, "coin", dur=0.52)
-# ---- sidewalk shed run
 mv_t(23.3, 23.8, 0, 34, 48)
 coin_t(24.1, 24.4, 24.7, 25.0, 25.3, 25.6)
 mv_t(25.85, 26.35, 34, 0, 42)
@@ -867,45 +1110,52 @@ land_on(36.4, "rat")
 peak(37.9, "coin")
 mv_t(38.35, 39.3, 0, 0, 44)
 coin_t(38.63, 38.87, 39.23)
-enemies.append(dict(kind="pigeon", x=x_of_t(39.3) + KW_t(39.3) / 2 - 5, mode="stomp", t=39.3))
+stomp_at(39.3, "pigeon")
 coin_t(39.53)
 mv_t(40.45, 41.45, 0, 0, 40)
 coin_t(40.67, 40.77, 41.0, 41.1, 41.33)
 coin_t(42.1, 42.2, 42.3, 42.53)
-land_on(45.1, "rat")
-# ---- brick breaking run
-BRICK_TS = [45.7, 46.3, 46.9, 47.5, 48.1]
-for tb in BRICK_TS:
+# ---- pipe down -> WORLD 1-2: Tonnelle Ave light rail tunnel
+for p in PIPES:
+    mv_t(p["land"] - 0.4, p["land"], 0, 20, 32)
+mv_t(PIPES[0]["up"], 45.1, 20, 0, 34)
+stomp_at(45.1, "rat")
+for tb in [45.7, 46.3, 46.9, 47.5, 48.1]:
     peak(tb, "brick", dur=0.56, apex=40)
 coin_t(46.7, 47.17, 47.67)
 brick_rows.append((blocks[-5]["x"] - 12, blocks[-1]["x"] + 24, blocks[-1]["y"]))
 mv_t(48.45, 48.97, 0, 0, 30)
 coin_t(48.63, 48.8)
-enemies.append(dict(kind="rat", x=x_of_t(48.97) + 3, mode="stomp", t=48.97))
+stomp_at(48.97, "rat")
 peak(49.9, "coin")
-land_on(51.7, "pigeon")
+label(T_HIT, "OUCH! RUNAWAY CART!", (255, 120, 120))
+land_on(51.7, "rat")
 land_on(52.9, "rat")
-over(54.2, "cellar", 32, 0.7)
+# ---- pipe up -> WORLD 1-3: Braddock Park
+mv_t(PIPES[1]["up"], PIPES[1]["up"] + 0.45, 20, 0, 28)
 peak(55.9, "coin")
-PIN_M = peak(T_PINATA, None, apex=40)                # pinata (100), cafecito caught at 60.1
-PINATA_POS = (x_of_t(T_PINATA) + KW_t(T_PINATA) / 2 - 8, GROUND - (40 + 24) - 16)
-over(59.0, "hydrant")
-# ---- cafecito speed mode
-knock(60.9, "rat"); knock(61.3, "pigeon"); knock(61.7, "cart"); knock(62.5, "rat")
-over(63.9, "cart", 38, 0.5)
-knock(65.3, "pigeon")
-over(66.3, "hydrant", 38, 0.5)
-for dt_, k_ in ((-0.15, "rat"), (-0.05, "pigeon"), (0.05, "rat")):
+PIN_M = peak(T_PINATA, None, apex=40)
+PINATA_POS = (x_of_t(T_PINATA) + KW_t(T_PINATA) / 2 - 8, GROUND - (40 + 16) - 16)
+label(T_PINATA, "PINATA!")
+label(T_CAFE + 0.05, "CAFECITO SPEED BOOST!")
+over(59.0, "net")
+knock(60.9, "duck"); knock(61.3, "goose"); knock(61.7, "goose"); knock(62.5, "duck")
+over(63.9, "net", 38, 0.5)
+label(64.6, "CHECKPOINT!", (255, 255, 255))
+knock(65.3, "goose")
+over(66.3, "net", 38, 0.5)
+for dt_, k_ in ((-0.15, "duck"), (-0.05, "goose"), (0.05, "duck")):
     knock(67.3 + dt_, k_)
 coin_t(67.3)
-for dt_, k_ in ((-0.15, "pigeon"), (-0.05, "rat"), (0.05, "pigeon")):
+for dt_, k_ in ((-0.15, "goose"), (-0.05, "duck"), (0.05, "goose")):
     knock(69.3 + dt_, k_)
 coin_t(69.3)
-knock(69.7, "rat")
-# ---- 83rd -> 84th: obstacles on the beat, crate stairs, flagpole
-over(71.2, "cart", 34)
-over(72.2, "hydrant")
-over(73.3, "cellar", 32, 0.7)
+knock(69.7, "duck")
+# ---- pipe -> WORLD 1-4: back on Bergenline, 83rd -> 84th, library
+mv_t(PIPES[2]["up"], PIPES[2]["up"] + 0.45, 20, 0, 28)
+label(72.4, "HURRY UP!", (255, 90, 90))
+over(72.9, "hydrant")
+over(74.1, "pothole", 32, 0.7)
 st = [75.6, 76.13, 76.66, 77.19, 77.72]
 for i in range(4):
     mv_t(st[i], st[i + 1], i * 10, (i + 1) * 10, (i + 1) * 10 + 8)
@@ -914,25 +1164,32 @@ for i in range(4):
     x_b = x_of_t(st[i + 2]) - 2 if i < 3 else X_FINAL + 22
     steps.append((x_a, x_b, (i + 1) * 10))
 
-moves.sort(key=lambda m: m["x0"])
+moves.sort(key=lambda m: m["t0"])
 for a_, b_ in zip(moves, moves[1:]):
-    assert a_["x1"] <= b_["x0"] + 0.01, (a_["t0"], b_["t0"])
+    assert a_["t1"] <= b_["t0"] + 0.001, ("overlap", a_["t0"], b_["t0"])
+
+PIPE_SPOTS = []
+for p in PIPES:
+    PIPE_SPOTS.append(x_of_t(p["land"]) + KW_t(p["land"]) / 2 - 14)
+    PIPE_SPOTS.append(x_of_t(p["up"]) + KW_t(p["up"]) / 2 - 14)
 
 
-def run_height(x):
+def run_height(t):
     h = 0
     for m in moves:
-        if m["x0"] <= x < m["x1"]:
+        if m["t0"] <= t < m["t1"]:
+            x = x_of_t(t)
+            if m["x1"] - m["x0"] < 1e-6:
+                return m["h1"], True
             return move_h(m, x), True
-        if m["x1"] <= x:
+        if m["t1"] <= t:
             h = m["h1"]
     return h, False
 
 
 for c in coins:
-    x = x_of_t(c["t"])
-    h, _ = run_height(x)
-    c["x"] = x + KW_t(c["t"]) / 2 - 3
+    h, _ = run_height(c["t"])
+    c["x"] = x_of_t(c["t"]) + KW_t(c["t"]) / 2 - 3
     c["hb"] = h + KH_t(c["t"]) / 2 - 4
 
 FJ_DUR = T_GRAB - T_FINAL
@@ -941,27 +1198,31 @@ GRAB_H = 72
 SLIDE = 1.1
 T_LAND = T_GRAB + SLIDE
 DOOR_X = LIB_X + LIB_W // 2 - 9
-T_CLEAR = 82.07                   # tally runs 82.37 -> 85.77 like the reference
+T_CLEAR = 82.07
 T_END = 85.9
 
 
 def player_state(t):
     if t < T_RUN:
         return X0, 0, "stand"
+    for p in PIPES:
+        if p["land"] <= t < p["up"]:
+            x = x_of_t(t)
+            kh = KH_t(t)
+            if t < p["sunk"]:
+                return x, 20 - kh * (t - p["land"]) / (p["sunk"] - p["land"]), "stand"
+            if t < p["black"]:
+                return x, 0, "gone"
+            return x, 20 - kh + kh * (t - p["black"]) / (p["up"] - p["black"]), "stand"
     if t < T_FINAL:
-        x = x_of_t(t)
-        h, air = run_height(x)
-        if not air and TB0 <= t < TB1:
-            return x, h, "stand"
-        return x, h, "jump" if air else "run"
+        h, air = run_height(t)
+        return x_of_t(t), h, "jump" if air else "run"
     if t < T_GRAB:
         p = (t - T_FINAL) / FJ_DUR
-        x = X_FINAL + (GRAB_X - X_FINAL) * p
         h = 40 + (GRAB_H - 40) * p + 30 * 4 * p * (1 - p) * (1 - p)
-        return x, h, "jump"
+        return X_FINAL + (GRAB_X - X_FINAL) * p, h, "jump"
     if t < T_LAND:
-        p = (t - T_GRAB) / SLIDE
-        return GRAB_X, GRAB_H * (1 - p), "pole"
+        return GRAB_X, GRAB_H * (1 - (t - T_GRAB) / SLIDE), "pole"
     if t < T_CLEAR + 1.5:
         if t - T_LAND < 0.25:
             return POLE_X + 2, 0, "stand"
@@ -974,12 +1235,9 @@ def camera(px):
     return int(max(0, min(LEVEL_W - W, px - 50)))
 
 
-def bus_x(t):
-    if t < TB0:
-        return XB0 - 23 - V_BUS * (TB0 - t)
-    if t < TB1:
-        return x_of_t(t) - 23
-    return XB1 - 23 + V_BUS * (t - TB1)
+def bus_x(t, k):
+    xb0 = x_of_t(TB0)
+    return xb0 - 2 + BUS_V * (t - TB0) + k * 76
 
 
 def score_at(t):
@@ -988,6 +1246,33 @@ def score_at(t):
 
 def time_at(t):
     return max(0, 400 - int(t * 2.45))
+
+
+def lerp(a, b, k):
+    return tuple(int(a[i] + (b[i] - a[i]) * k) for i in range(len(a)))
+
+
+def sky_colors(t, w):
+    if w == 1:
+        k = min(1, t / 40)
+        return lerp((150, 180, 245), (96, 160, 255), k), lerp((255, 214, 190), (175, 215, 255), k)
+    if w == 3:
+        k = (t - 54) / 16
+        return lerp((250, 170, 90), (230, 120, 90), k), lerp((255, 225, 150), (255, 190, 120), k)
+    k = min(1, max(0, (t - 71.5) / 10))
+    return lerp((80, 50, 130), (20, 16, 60), k), lerp((240, 120, 110), (110, 60, 140), k)
+
+
+def tint_for(t, w):
+    if w == 3:
+        return (255, 228, 195)
+    if w == 4:
+        return lerp((225, 190, 215), (150, 135, 210), min(1, max(0, (t - 71.5) / 9)))
+    return None
+
+
+def night_k(t, w):
+    return 0 if w != 4 else min(1, max(0, (t - 71.5) / 7))
 
 
 # ---------------------------------------------------------------- render
@@ -1012,9 +1297,28 @@ def item_path(t, t0, p0, t1, p1, bump):
 
 
 def popup_pos(t):
-    x = x_of_t(min(t, T_FINAL))
-    h, _ = run_height(x)
-    return x, GROUND - h - KH_t(t) - 10
+    h, _ = run_height(min(t, T_FINAL - 0.01))
+    return x_of_t(min(t, T_FINAL)), GROUND - h - KH_t(t) - 10
+
+
+def enemy_img(kind, w, t, flip_dir=True):
+    if w == 3:
+        kind = {"pigeon": "goose", "rat": "duck", "cart": "goose"}.get(kind, kind)
+    if w == 2 and kind == "pigeon":
+        kind = "rat"
+    if kind == "pigeon":
+        return PIGEON[int(t * 5) % 2].transpose(Image.FLIP_LEFT_RIGHT), kind
+    if kind == "rat":
+        return RAT[int(t * 8) % 2], kind
+    if kind == "goose":
+        return GOOSE[int(t * 6) % 2], kind
+    if kind == "duck":
+        return DUCK[int(t * 6) % 2], kind
+    return CART, kind
+
+
+def centered(frame, y, s, col, sc=1, sh=None):
+    draw_text(frame, (W - text_w(s, sc)) // 2, y, s, col, sc, sh)
 
 
 def render():
@@ -1030,17 +1334,18 @@ def render():
     trail = []
     rng = random.Random(9)
     pops = []
-    for (tt, d) in REF_SCORE:
+    for (tt, d_) in REF_SCORE:
         if tt == T_GRAB:
-            pops.append((tt, POLE_X + 4, GROUND - GRAB_H - 20, str(d), (255, 255, 255)))
+            pops.append((tt, POLE_X + 4, GROUND - GRAB_H - 20, str(d_), (255, 255, 255)))
         else:
             px_, py_ = popup_pos(tt)
-            txt = "CAFECITO!" if tt == T_CAFE else str(d)
-            col = (255, 220, 60) if tt == T_CAFE else (255, 255, 255)
-            pops.append((tt, px_, py_, txt, col))
-    pb = [b for b in blocks if b["kind"] == "pastelito"][0]
+            pops.append((tt, px_, py_, str(d_), (255, 255, 255)))
+    pb = [b for b in blocks if b["kind"] == "batido"][0]
+    stars = [(random.Random(k).randint(0, W), random.Random(k + 99).randint(30, 150)) for k in range(40)]
+    white, sh = (255, 255, 255), (30, 30, 60)
     for fi in range(n):
         t = fi / FPS
+        w = world_at(t)
         px, ph, pose = player_state(t)
         cam = camera(px)
         feet = GROUND - ph
@@ -1054,17 +1359,33 @@ def render():
             score += done * 50
             time_left -= done
 
-        # ---------------- background
-        frame = Image.new("RGBA", (W, H), (106, 168, 255, 255))
+        # ---------------- sky
+        top, bot = sky_colors(t, w)
+        frame = Image.new("RGBA", (W, H), top + (255,))
         dr = ImageDraw.Draw(frame)
-        for yy in range(110, GROUND):
-            k = (yy - 110) / (GROUND - 110)
-            dr.line([0, yy, W, yy], fill=(int(106 + 60 * k), int(168 + 40 * k), 255))
-        co = int(cam * 0.25 + t * 3) % CLOUDS.width
-        _paste_clip(frame, CLOUDS, -co, 0)
-        _paste_clip(frame, CLOUDS, -co + CLOUDS.width, 0)
-        _paste_clip(frame, SKYLINE, -int(cam * 0.5), 0)
+        for yy in range(30, GROUND):
+            dr.line([0, yy, W, yy], fill=lerp(top, bot, (yy - 30) / (GROUND - 30)))
+        nk = night_k(t, w)
+        if nk > 0:
+            for sx, sy in stars:
+                if (sx * 7 + int(t * 3)) % 11 != 0:
+                    dr.point((sx, sy), fill=lerp(bot, (255, 255, 230), nk))
+            dr.ellipse([108, 40, 122, 54], fill=lerp(top, (250, 245, 210), nk))
+        if w in (1, 3):
+            co = int(cam * 0.25 + t * 3) % CLOUDS.width
+            _paste_clip(frame, CLOUDS, -co, 0)
+            _paste_clip(frame, CLOUDS, -co + CLOUDS.width, 0)
+        if w in (1, 4):
+            sky_img = SKYLINE if nk == 0 else Image.blend(SKYLINE, SKYLINE_NIGHT, nk)
+            _paste_clip(frame, sky_img, -int(cam * 0.5), 0)
         _paste_clip(frame, LEVEL, -cam, 0)
+
+        # light rail train in the tunnel
+        if w == 2:
+            for t0 in (45.2, 49.4, 52.2):
+                tx_ = x_of_t(t0) + 160 - (t - t0) * 150
+                if -190 < tx_ - cam < W + 10:
+                    _paste_clip(frame, TRAIN, int(tx_ - cam), 155)
 
         # ---------------- street props
         for (a_, b_) in cellars:
@@ -1072,8 +1393,9 @@ def render():
             if cx1 < -10 or cx0 > W + 10:
                 continue
             dr.rectangle([cx0, GROUND, cx1, GROUND + 9], fill=(20, 18, 22))
-            dr.polygon([(cx0 - 6, GROUND - 12), (cx0, GROUND), (cx0 + 2, GROUND), (cx0 - 4, GROUND - 12)], fill=(130, 130, 140))
-            dr.polygon([(cx1 + 6, GROUND - 12), (cx1, GROUND), (cx1 - 2, GROUND), (cx1 + 4, GROUND - 12)], fill=(130, 130, 140))
+            dr.rectangle([cx0 + 2, GROUND + 2, cx1 - 2, GROUND + 4], fill=(45, 40, 45))
+            _paste_clip(frame, CONE, int(cx0 - 9), GROUND - 9)
+            _paste_clip(frame, CONE, int(cx1 + 2), GROUND - 9)
         for (a_, b_, hh) in ledges:
             for bx in np.arange(a_, b_, 12):
                 _paste_clip(frame, BRICK, int(bx - cam), GROUND - hh)
@@ -1094,28 +1416,37 @@ def render():
                         wx = hx + 4 + side * ph_ * 16 - cam
                         wy = GROUND - 9 - 18 * 4 * ph_ * (1 - ph_) * 0.6
                         dr.rectangle([wx, wy, wx + 1, wy + 1], fill=(150, 210, 255))
+        for nx in nets:
+            _paste_clip(frame, NET, int(nx - cam), GROUND - 13)
         for i, (a_, b_, hh) in enumerate(steps):
             for lvl in range(hh // 10):
                 for cx_ in np.arange(a_, b_ - 1, 18):
                     cw = int(min(18, b_ - cx_))
                     _paste_clip(frame, CRATES[(i + lvl) % 3].crop((0, 0, cw, 10)), int(cx_ - cam), GROUND - 10 - lvl * 10)
-        # pinata
+        # ducks paddling on Woodcliff Lake
+        if w == 3:
+            for k in range(6):
+                dx = (k * 61 + t * (6 + k)) % (W + 40) - 20
+                _paste_clip(frame, DUCK[int(t * 2 + k) % 2], int(dx), 222 + (k % 3) * 9)
+        # pinata on a tree branch
         pnx, pny = PINATA_POS
-        if t < T_PINATA:
-            sway = math.sin(t * 3) * 2
-            dr.line([pnx + 8 - cam, 60, pnx + 8 + sway - cam, pny], fill=(240, 240, 240))
-            _paste_clip(frame, PINATA, int(pnx + sway - cam), int(pny))
-        else:
-            dt = t - T_PINATA
-            dr.line([pnx + 8 - cam, 60, pnx + 8 - cam, pny - 10], fill=(240, 240, 240))
-            if dt < 1.0:
-                r2 = random.Random(4)
-                for k in range(26):
-                    ang = r2.uniform(0, 2 * math.pi); sp = r2.uniform(20, 60)
-                    cxp = pnx + 8 + math.cos(ang) * sp * dt - cam
-                    cyp = pny + 8 + math.sin(ang) * sp * dt + 60 * dt * dt
-                    col = [(255, 90, 170), (255, 220, 60), (80, 220, 255), (120, 255, 120)][k % 4]
-                    dr.rectangle([cxp, cyp, cxp + 1, cyp + 1], fill=col)
+        if w == 3:
+            dr.rectangle([pnx - 20 - cam, 72, pnx + 30 - cam, 75], fill=(100, 65, 35))
+            if t < T_PINATA:
+                sway = math.sin(t * 3) * 2
+                dr.line([pnx + 8 - cam, 75, pnx + 8 + sway - cam, pny], fill=(240, 240, 240))
+                _paste_clip(frame, PINATA, int(pnx + sway - cam), int(pny))
+            else:
+                dt = t - T_PINATA
+                dr.line([pnx + 8 - cam, 75, pnx + 8 - cam, pny - 10], fill=(240, 240, 240))
+                if dt < 1.0:
+                    r2 = random.Random(4)
+                    for k in range(26):
+                        ang = r2.uniform(0, 2 * math.pi); sp = r2.uniform(20, 60)
+                        cxp = pnx + 8 + math.cos(ang) * sp * dt - cam
+                        cyp = pny + 8 + math.sin(ang) * sp * dt + 60 * dt * dt
+                        col = [(255, 90, 170), (255, 220, 60), (80, 220, 255), (120, 255, 120)][k % 4]
+                        dr.rectangle([cxp, cyp, cxp + 1, cyp + 1], fill=col)
 
         # ---------------- blocks
         for (a_, b_, by) in brick_rows:
@@ -1124,6 +1455,8 @@ def render():
                     continue
                 _paste_clip(frame, BRICK, int(bx - cam), by)
         for b in blocks:
+            if b["x"] - cam < -20 or b["x"] - cam > W + 20:
+                continue
             hit = t >= b["t"]
             if b["kind"] == "brick" and hit:
                 dt = t - b["t"]
@@ -1144,23 +1477,24 @@ def render():
         # ---------------- power-up items
         if T_POWER_HIT <= t < T_BIG:
             if t - T_POWER_HIT < 0.3:
-                ix, iy = pb["x"] + 1, pb["y"] - 7 * (t - T_POWER_HIT) / 0.3
+                ix, iy = pb["x"] + 2, pb["y"] - 11 * (t - T_POWER_HIT) / 0.3
             else:
-                ix, iy = item_path(t, T_POWER_HIT + 0.3, (pb["x"] + 1, pb["y"] - 7),
-                                   T_BIG, (X_BIG + 8, GROUND - 14), 6)
-            _paste_clip(frame, PASTELITO, int(ix - cam), int(iy))
+                ix, iy = item_path(t, T_POWER_HIT + 0.3, (pb["x"] + 2, pb["y"] - 11),
+                                   T_BIG, (x_of_t(T_BIG) + 8, GROUND - 16), 6)
+            _paste_clip(frame, BATIDO, int(ix - cam), int(iy))
         if T_PINATA <= t < T_CAFE:
             ix, iy = item_path(t, T_PINATA, (PINATA_POS[0] + 4, PINATA_POS[1] + 4),
-                               T_CAFE, (XH0 + 6, GROUND - 16), 22)
+                               T_CAFE, (x_of_t(T_CAFE) + 6, GROUND - 16), 22)
             _paste_clip(frame, CAFECITO, int(ix - cam), int(iy))
 
         # ---------------- coins
         for c in coins:
+            if c["x"] - cam < -10 or c["x"] - cam > W + 10:
+                continue
             cy = GROUND - c["hb"] - 8
             if t < c["t"]:
-                if -10 < c["x"] - cam < W + 10:
-                    f = COIN_FRAMES[int(t * 8 + c["x"] * 0.1) % 4]
-                    _paste_clip(frame, f, int(c["x"] + (6 - f.width) // 2 - cam), int(cy))
+                f = COIN_FRAMES[int(t * 8 + c["x"] * 0.1) % 4]
+                _paste_clip(frame, f, int(c["x"] + (6 - f.width) // 2 - cam), int(cy))
             elif t - c["t"] < 0.25:
                 k = (t - c["t"]) / 0.25
                 for a in range(4):
@@ -1171,72 +1505,82 @@ def render():
 
         # ---------------- enemies
         for e in enemies:
-            kind = e["kind"]
             if e["x"] - cam > W + 40 or e["x"] - cam < -80:
                 continue
+            img, kind = enemy_img(e["kind"], w, t)
             if t < e["t"]:
-                if kind == "pigeon":
-                    img = PIGEON[int(t * 5 + e["x"]) % 2].transpose(Image.FLIP_LEFT_RIGHT)
-                    _paste_clip(frame, img, int(e["x"] - cam), GROUND - 8)
-                elif kind == "rat":
-                    _paste_clip(frame, RAT[int(t * 8) % 2], int(e["x"] + (e["t"] - t) * 12 - cam), GROUND - 6)
+                ex = e["x"]
+                if kind in ("rat", "duck"):
+                    ex += (e["t"] - t) * 12
                 elif kind == "cart":
-                    _paste_clip(frame, CART, int(e["x"] + (e["t"] - t) * 18 - cam), GROUND - 12)
+                    ex += (e["t"] - t) * 18
+                _paste_clip(frame, img, int(ex - cam), GROUND - img.height)
                 continue
             dt = t - e["t"]
             if e["mode"] == "stomp":
                 if kind == "pigeon" and dt < 2.0:
-                    _paste_clip(frame, PIGEON_FLY[int(t * 12) % 2],
-                                int(e["x"] + dt * 50 - cam), int(GROUND - 10 - dt * 70))
-                elif kind == "rat" and dt < 0.4:
-                    _paste_clip(frame, RAT[0].resize((12, 3), Image.NEAREST), int(e["x"] - cam), GROUND - 3)
+                    _paste_clip(frame, PIGEON_FLY[int(t * 12) % 2], int(e["x"] + dt * 50 - cam), int(GROUND - 10 - dt * 70))
+                elif dt < 0.4:
+                    _paste_clip(frame, img.resize((img.width, 3), Image.NEAREST), int(e["x"] - cam), GROUND - 3)
             elif dt < 1.5:
-                img = {"pigeon": PIGEON[0], "rat": RAT[0], "cart": CART}[kind].transpose(Image.FLIP_TOP_BOTTOM)
+                im2 = img.transpose(Image.FLIP_TOP_BOTTOM)
                 ex = e["x"] + 50 * dt - cam
-                ey = GROUND - img.height - (60 * dt - 200 * dt * dt)
-                _paste_clip(frame, img, int(ex), int(ey))
+                ey = GROUND - im2.height - (60 * dt - 200 * dt * dt)
+                _paste_clip(frame, im2, int(ex), int(ey))
                 if dt < 0.12:
                     for a in range(6):
                         ang = a * math.pi / 3
                         dr.point((e["x"] + 6 + math.cos(ang) * 8 - cam, GROUND - 6 + math.sin(ang) * 8), fill=(255, 255, 200))
         for (ta, xc) in carts:
             _paste_clip(frame, CART, int(xc - 6 + (ta - t) * 18 - cam), GROUND - 12)
+        # the runaway cart that hits him
+        if 48.8 < t < T_HIT + 1.2:
+            xh = x_of_t(T_HIT) + KW_t(T_HIT - 0.01) - 2
+            if t < T_HIT:
+                cx_ = xh + (T_HIT - t) * 110
+                _paste_clip(frame, CART, int(cx_ - cam), GROUND - 12)
+            else:
+                dt = t - T_HIT
+                _paste_clip(frame, CART.rotate(-40 * dt * 4, expand=True), int(xh + 40 * dt - cam), int(GROUND - 14 - 50 * dt + 120 * dt * dt))
 
         # ---------------- vehicles
-        bxp = bus_x(t)
-        if -70 < bxp - cam < W + 10:
-            _paste_clip(frame, BUS, int(bxp - cam), GROUND - ROOF)
-        # Gargiulo Produce truck driving the other way
-        for t0 in (29.0, 64.0):
-            if t0 - 2 < t < t0 + 3:
-                tx_ = x_of_t(t0) + 100 - (t - t0) * 70
-                if -90 < tx_ - cam < W + 10:
-                    _paste_clip(frame, TRUCK, int(tx_ - cam), 222)
-        car_x = -60 + (t - 6) * 75
-        for off in (0, 1300, 2600):
-            cxs = car_x + off - cam
-            if -50 < cxs < W + 10:
-                _paste_clip(frame, CAR, int(cxs), 238)
+        if w == 1:
+            for k in (0, 1):
+                bxp = bus_x(t, k)
+                if -70 < bxp - cam < W + 10:
+                    _paste_clip(frame, BUS, int(bxp - cam), GROUND - ROOF)
+        if w in (1, 4):
+            for t0 in (29.0, 74.6):
+                if t0 - 2 < t < t0 + 3 and world_at(t0) == w:
+                    tx_ = x_of_t(t0) + 100 - (t - t0) * 70
+                    if -90 < tx_ - cam < W + 10:
+                        _paste_clip(frame, TRUCK, int(tx_ - cam), 206)
+            for k, (spd, off, col) in enumerate([(75, 0, CAR), (60, 260, CAR_R), (90, 520, CAR_B)]):
+                cxs = (off + t * spd - cam) % 780 - 200
+                if -50 < cxs < W + 10 and not (14.0 < t < 20.0):
+                    _paste_clip(frame, col, int(cxs), 226)
 
-        # ---------------- flag pole
+        # ---------------- flag pole (World 1-4)
         pxs = POLE_X - cam
-        dr.rectangle([pxs - 4, GROUND - 8, pxs + 5, GROUND - 1], fill=(170, 160, 140))
-        dr.rectangle([pxs, GROUND - 108, pxs + 1, GROUND - 9], fill=(220, 220, 225))
-        dr.ellipse([pxs - 2, GROUND - 113, pxs + 3, GROUND - 108], fill=(250, 200, 40))
-        if t < T_GRAB:
-            fy = GROUND - 34
-        elif t < T_LAND:
-            fy = GROUND - 34 - (t - T_GRAB) / SLIDE * 72
-        else:
-            fy = GROUND - 106
-        fy = int(fy)
-        dr.rectangle([pxs + 2, fy, pxs + 33, fy + 11], fill=(170, 30, 35))
-        dr.rectangle([pxs + 2, fy + 12, pxs + 33, fy + 23], fill=(250, 200, 40))
-        _paste_clip(frame, LOGO_FLAG, pxs + 8, fy + 2)
+        if w == 4:
+            dr.rectangle([pxs - 4, GROUND - 8, pxs + 5, GROUND - 1], fill=(170, 160, 140))
+            dr.rectangle([pxs, GROUND - 108, pxs + 1, GROUND - 9], fill=(220, 220, 225))
+            dr.ellipse([pxs - 2, GROUND - 113, pxs + 3, GROUND - 108], fill=(250, 200, 40))
+            fy = GROUND - 34 if t < T_GRAB else (GROUND - 34 - (t - T_GRAB) / SLIDE * 72 if t < T_LAND else GROUND - 106)
+            fy = int(fy)
+            dr.rectangle([pxs + 2, fy, pxs + 33, fy + 11], fill=(170, 30, 35))
+            dr.rectangle([pxs + 2, fy + 12, pxs + 33, fy + 23], fill=(250, 200, 40))
+            _paste_clip(frame, LOGO_FLAG, pxs + 8, fy + 2)
 
         # ---------------- player
         if pose != "gone":
-            is_big = kid_big_t(t) and not (t - T_BIG < 0.6 and int((t - T_BIG) / 0.08) % 2 == 0)
+            is_big = kid_big_t(t)
+            if 0 <= t - T_BIG < 0.6 or 0 <= t - T_CAFE < 0.6:
+                tt0 = T_BIG if 0 <= t - T_BIG < 0.6 else T_CAFE
+                is_big = int((t - tt0) / 0.08) % 2 == 1
+            if 0 <= t - T_HIT < 0.6:
+                is_big = int((t - T_HIT) / 0.08) % 2 == 0
+            blink = T_HIT + 0.6 <= t < T_HIT + 1.9 and fi % 2 == 0
             S = BIG if is_big else SMALL
             if hyper:
                 S = HYPER[int(t * 10) % 4]
@@ -1251,7 +1595,8 @@ def render():
                     if len(trail) > k * 2:
                         tx, ty, timg = trail[-k * 2]
                         paste(frame, timg, tx - cam, ty, a)
-            paste(frame, img, px - cam, feet - img.height)
+            if not blink:
+                paste(frame, img, px - cam, feet - img.height)
             trail.append((px, feet - img.height, img))
             trail[:] = trail[-8:]
             if hyper:
@@ -1259,62 +1604,115 @@ def render():
                     sx = px + rng.uniform(-4, img.width + 4) - cam
                     sy = feet - rng.uniform(0, img.height + 6)
                     dr.point((sx, sy), fill=rng.choice([(255, 255, 255), (255, 240, 120), (150, 230, 255)]))
+        # pipes are drawn over the kid so he slides into them
+        for sx in PIPE_SPOTS:
+            if -30 < sx - cam < W + 10:
+                _paste_clip(frame, PIPE, int(sx - cam), GROUND - 20)
 
-        # ---------------- score pops
+        # ---------------- lighting
+        tint = tint_for(t, w)
+        if tint:
+            frame = ImageChops.multiply(frame, Image.new("RGBA", (W, H), tint + (255,)))
+            dr = ImageDraw.Draw(frame)
+        if nk > 0:
+            glow = lerp((60, 50, 40), (255, 220, 120), nk)
+            for (wx, wy) in WINDOWS:
+                sx = wx - cam
+                if -10 < sx < W and wx >= WR[4][0] and (wx * 13 + wy) % 5 != 0:
+                    dr.rectangle([sx, wy, sx + 7, wy + 5], fill=glow)
+
+        # ---------------- score pops + labels
         for (st_, sx, sy, txt, col) in pops:
             if 0 <= t - st_ < 0.8:
                 draw_text(frame, int(sx - cam), int(sy - (t - st_) * 25), txt, col, shadow=(0, 0, 0))
+        for (lt, txt, col) in labels:
+            if 0 <= t - lt < 1.1:
+                yb = 104 - int(min(1, (t - lt) / 0.15) * 8)
+                bw = text_w(txt) + 8
+                dr.rounded_rectangle([(W - bw) // 2, yb - 3, (W + bw) // 2, yb + 7], 2, fill=(20, 20, 40))
+                centered(frame, yb, txt, col)
 
         # ---------------- HUD
-        white, sh = (255, 255, 255), (30, 30, 60)
         draw_text(frame, 6, 10, "SCORE", white, shadow=sh)
         draw_text(frame, 6, 17, f"{min(score, 999999):06d}", white, shadow=sh)
         _paste_clip(frame, COIN_FRAMES[int(t * 6) % 4], 34, 16)
         draw_text(frame, 42, 17, f"x{ncoins:02d}", white, shadow=sh)
         draw_text(frame, 66, 10, "N.BERGEN", white, shadow=sh)
-        draw_text(frame, 76, 17, "1-1", white, shadow=sh)
+        draw_text(frame, 76, 17, f"1-{w}", white, shadow=sh)
         draw_text(frame, 116, 10, "TIME", white, shadow=sh)
         draw_text(frame, 118, 17, f"{max(0, time_left):03d}", white, shadow=sh)
 
-        # ---------------- title overlay
-        if t < 2.4:
-            a = 1.0 if t < 1.6 else max(0.0, 1 - (t - 1.6) / 0.8)
-            ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-            od = ImageDraw.Draw(ov)
-            od.rectangle([8, 44, W - 9, 92], fill=(20, 20, 50, int(200 * a)))
-            od.rectangle([8, 44, W - 9, 92], outline=(255, 210, 60, int(255 * a)))
-            frame.alpha_composite(ov)
-            if a > 0.5:
-                draw_text(frame, (W - text_w("BERGENLINE", 2)) // 2, 52, "BERGENLINE", (255, 210, 60), 2, (120, 40, 20))
-                draw_text(frame, (W - text_w("AVENUE", 2)) // 2, 66, "AVENUE", (255, 210, 60), 2, (120, 40, 20))
-                draw_text(frame, (W - text_w("NORTH BERGEN, NJ")) // 2, 82, "NORTH BERGEN, NJ", white)
+        # ---------------- progress bar
+        if T_RUN <= t < T_END:
+            dr.rounded_rectangle([4, 240, W - 5, 254], 3, fill=(15, 15, 35))
+            marks = [(T_RUN, "1-1", (240, 200, 60)), (PIPES[0]["land"], "1-2", (90, 120, 230)),
+                     (PIPES[1]["land"], "1-3", (90, 200, 90)), (PIPES[2]["land"], "1-4", (240, 120, 90))]
+            x0b, x1b = 10, W - 26
+            fx = lambda tt: x0b + (x1b - x0b) * (tt - T_RUN) / (T_GRAB - T_RUN)
+            for i, (tm, lbl, col) in enumerate(marks):
+                xa = fx(tm)
+                xb = fx(marks[i + 1][0]) if i < 3 else x1b
+                dr.rectangle([xa, 243, xb - 1, 245], fill=col)
+                draw_text(frame, int(xa), 248, lbl, col)
+            draw_text(frame, W - 23, 243, "LIB", white)
+            kx = fx(min(t, T_GRAB))
+            dr.rectangle([kx - 1, 241, kx + 2, 246], fill=(255, 255, 255))
+            dr.point((kx, 240), fill=(232, 64, 40))
+
+        # ---------------- PRESS START screen
+        if t < T_RUN:
+            frame.alpha_composite(Image.new("RGBA", (W, H), (10, 10, 30, 255)))
+            _paste_clip(frame, LOGO_CARD, (W - 44) // 2, 40)
+            centered(frame, 96, "BERGENLINE", (255, 210, 60), 2, (120, 40, 20))
+            centered(frame, 110, "AVENUE", (255, 210, 60), 2, (120, 40, 20))
+            centered(frame, 130, "WORLD 1-1", white)
+            centered(frame, 137, "NORTH BERGEN, NJ", white)
+            if int(t * 4) % 2 == 0:
+                centered(frame, 160, "PRESS START", (255, 120, 120))
+        elif t < T_RUN + 0.15:
+            frame.alpha_composite(Image.new("RGBA", (W, H), (255, 255, 255, int(255 * (1 - (t - T_RUN) / 0.15)))))
+
+        # ---------------- pipe black screens with world cards
+        for p in PIPES:
+            if p["sunk"] <= t < p["black"]:
+                frame.alpha_composite(Image.new("RGBA", (W, H), (0, 0, 0, 255)))
+                a_, b_, c_ = WORLD_CARDS[p["world"]]
+                centered(frame, 96, a_, white, 2)
+                centered(frame, 116, b_, (255, 210, 60))
+                centered(frame, 124, c_, (255, 210, 60))
 
         # ---------------- clear + fireworks
         if t >= T_CLEAR:
-            draw_text(frame, (W - text_w("COURSE CLEAR!")) // 2, 70, "COURSE CLEAR!", white, 1, sh)
+            centered(frame, 70, "COURSE CLEAR!", white, 1, sh)
             if t >= T_CLEAR + 0.3:
-                draw_text(frame, (W - text_w("TIME BONUS")) // 2, 80, "TIME BONUS", (255, 210, 60), 1, sh)
-            for k, (fx, fy2, ft) in enumerate([(30, 60, 0.3), (110, 50, 0.8), (70, 40, 1.4), (40, 100, 2.0), (100, 95, 2.6)]):
+                centered(frame, 80, "TIME BONUS", (255, 210, 60), 1, sh)
+            for k, (fx2, fy2, ft) in enumerate([(30, 60, 0.3), (110, 50, 0.8), (70, 40, 1.4), (40, 100, 2.0), (100, 95, 2.6)]):
                 dt = t - T_CLEAR - ft
                 if 0 <= dt < 0.7:
                     rad = 4 + dt * 22
                     colr = [(255, 90, 90), (255, 230, 90), (120, 220, 255), (150, 255, 150), (255, 150, 230)][k]
                     for a in range(12):
                         ang = a * math.pi / 6
-                        dr.rectangle([fx + math.cos(ang) * rad, fy2 + math.sin(ang) * rad,
-                                      fx + math.cos(ang) * rad + 1, fy2 + math.sin(ang) * rad + 1], fill=colr)
+                        dr.rectangle([fx2 + math.cos(ang) * rad, fy2 + math.sin(ang) * rad,
+                                      fx2 + math.cos(ang) * rad + 1, fy2 + math.sin(ang) * rad + 1], fill=colr)
 
         # ---------------- end card
         if t >= T_END:
             a = min(1.0, (t - T_END) / 0.6)
             frame.alpha_composite(Image.new("RGBA", (W, H), (15, 15, 35, int(235 * a))))
             if a >= 1.0:
-                _paste_clip(frame, LOGO_CARD, (W - 44) // 2, 46)
-                draw_text(frame, (W - text_w("BERGENLINE", 2)) // 2, 96, "BERGENLINE", (255, 210, 60), 2, (120, 40, 20))
-                draw_text(frame, (W - text_w("AVENUE", 2)) // 2, 110, "AVENUE", (255, 210, 60), 2, (120, 40, 20))
-                draw_text(frame, (W - text_w("NORTH BERGEN, NJ")) // 2, 128, "NORTH BERGEN, NJ", white)
-                draw_text(frame, (W - text_w(f"SCORE {score:06d}")) // 2, 146, f"SCORE {score:06d}", white)
-                draw_text(frame, (W - text_w(f"COINS x{ncoins:02d}")) // 2, 154, f"COINS x{ncoins:02d}", (255, 210, 60))
+                _paste_clip(frame, LOGO_CARD, (W - 44) // 2, 36)
+                centered(frame, 86, "BERGENLINE", (255, 210, 60), 2, (120, 40, 20))
+                centered(frame, 100, "AVENUE", (255, 210, 60), 2, (120, 40, 20))
+                centered(frame, 118, "NORTH BERGEN, NJ", white)
+                centered(frame, 132, f"SCORE {score:06d}", white)
+                centered(frame, 140, f"COINS x{ncoins:02d}", (255, 210, 60))
+                if int(t * 2.5) % 2 == 0:
+                    centered(frame, 160, "CONTINUE TO WORLD 2-1?", (255, 120, 120))
+                centered(frame, 176, "DROP YOUR FAVORITE", white)
+                centered(frame, 183, "NORTH BERGEN SPOT", white)
+                centered(frame, 190, "WE MISSED!", white)
+                centered(frame, 204, "COMMENT BELOW", (255, 210, 60))
 
         if prev_set is not None:
             if fi in prev_set:
@@ -1327,6 +1725,7 @@ def render():
         ff.stdin.close()
         ff.wait()
     print(f"coins {len(coins)}  duration {DURATION:.1f}s  level {LEVEL_W}px", file=sys.stderr)
+
 
 
 # ---------------------------------------------------------------- audio
@@ -1480,6 +1879,13 @@ def sfx_wave(kind):
         return np.concatenate([a, np.zeros(int(0.06 * SR)), a])
     if kind == "sparkle":
         return square(2637, 0.025, 0.5, 0.03)
+    if kind == "pipe":
+        out = np.concatenate([square(f, 0.06, 0.5, 0.12) for f in (523, 392, 330, 262, 523, 392, 330, 262)])
+        return out
+    if kind == "hit":
+        n = int(0.35 * SR); tt = np.arange(n) / SR
+        f = 900 - 1800 * tt
+        return np.where((np.cumsum(f) / SR) % 1 < 0.5, 1, -1) * 0.16 * np.linspace(1, 0, n)
     return np.zeros(1)
 
 
@@ -1524,10 +1930,27 @@ if __name__ == "__main__":
     render()
     if os.environ.get("PREVIEW"):
         sys.exit()
-    # soundtrack: the reference video's song (with its sound effects)
+    # soundtrack: the reference video's song, plus pipe and hit effects on top
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(OUT_DIR / "reference_audio.m4a"),
+                    "-ac", "2", "-ar", str(SR), str(OUT_DIR / "_ref.wav")], check=True)
+    with wave.open(str(OUT_DIR / "_ref.wav")) as wf:
+        ref = np.frombuffer(wf.readframes(wf.getnframes()), np.int16).reshape(-1, 2).astype(float) / 32768
+    extra = [(p["land"], "pipe") for p in PIPES] + [(p["black"], "pipe") for p in PIPES] + [(T_HIT, "hit")]
+    for t0, kind in extra:
+        w_ = sfx_wave(kind) * 0.8
+        k = int(t0 * SR)
+        n_ = min(len(w_), len(ref) - k)
+        ref[k:k + n_] += w_[:n_, None]
+    ref = np.clip(ref, -1, 1)
+    with wave.open(str(OUT_DIR / "_mix.wav"), "wb") as wf:
+        wf.setnchannels(2); wf.setsampwidth(2); wf.setframerate(SR)
+        wf.writeframes((ref * 32767).astype(np.int16).tobytes())
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(OUT_DIR / "_video.mp4"),
-                    "-i", str(OUT_DIR / "reference_audio.m4a"), "-map", "0:v", "-map", "1:a",
-                    "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest",
+                    "-i", str(OUT_DIR / "_mix.wav"), "-map", "0:v", "-map", "1:a",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest",
                     str(OUT_DIR / "bergenline_run.mp4")], check=True)
+    (OUT_DIR / "_ref.wav").unlink()
+    (OUT_DIR / "_mix.wav").unlink()
     (OUT_DIR / "_video.mp4").unlink()
     print("done:", OUT_DIR / "bergenline_run.mp4", f"{DURATION:.1f}s")
+
