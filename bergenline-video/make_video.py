@@ -603,6 +603,14 @@ DUCK = [
     sprite([".gg.......", "YgEg......", ".gg.......", "..gg......", ".bbbbbbb..", "bbbbbbbbb.",
             ".bbbbbbb..", "...O.O...."], PAL3),
 ]
+LF_PAL = {"K": (25, 20, 20, 255), "T": (205, 185, 150, 255), "s": (30, 25, 25, 255),
+          "R": (220, 40, 50, 255), "W": (245, 240, 230, 255)}
+LANTERNFLY = [   # spotted lanternfly: wings closed / wings flashing red
+    sprite(["............", "..TTTTTTTT..", "KKTsTTsTTTT.", "KKTTTsTTsTTT",
+            ".KTsTTTsTTT.", "..TTTTTTTT..", "..K..K..K...", "............"], LF_PAL),
+    sprite(["....RRRR....", "..RRsRRsRR..", "KKTsTTsTTTT.", "KKTTTsTTsTTT",
+            ".KTsTTTsTTT.", "..RRsWWsRR..", "....RRRR....", "..K..K..K..."], LF_PAL),
+]
 BATIDO = sprite(["....P..", "...P...", "..P....", "WWWWWWW", "WYYYYYW", ".YYYYY.", ".YYYYY.",
                  ".YYYYY.", "..YYY..", "..YYY..", ".WWWWW."], PAL3)
 
@@ -1136,21 +1144,22 @@ mv_t(PIPES[1]["up"], PIPES[1]["up"] + 0.45, 20, 0, 28)
 peak(55.9, "coin")
 PIN_M = peak(T_PINATA, None, apex=40)
 PINATA_POS = (x_of_t(T_PINATA) + KW_t(T_PINATA) / 2 - 8, GROUND - (40 + 16) - 16)
+label(55.2, "STOMP THE LANTERNFLIES!", (255, 120, 120))
 label(T_PINATA, "PINATA!")
 label(T_CAFE + 0.05, "CAFECITO SPEED BOOST!")
 over(59.0, "net")
-knock(60.9, "duck"); knock(61.3, "goose"); knock(61.7, "goose"); knock(62.5, "duck")
+knock(60.9, "fly"); knock(61.3, "fly"); knock(61.7, "fly"); knock(62.5, "fly")
 over(63.9, "net", 38, 0.5)
 label(64.6, "CHECKPOINT!", (255, 255, 255))
-knock(65.3, "goose")
+knock(65.3, "fly")
 over(66.3, "net", 38, 0.5)
-for dt_, k_ in ((-0.15, "duck"), (-0.05, "goose"), (0.05, "duck")):
+for dt_, k_ in ((-0.15, "fly"), (-0.05, "fly"), (0.05, "fly")):
     knock(67.3 + dt_, k_)
 coin_t(67.3)
-for dt_, k_ in ((-0.15, "goose"), (-0.05, "duck"), (0.05, "goose")):
+for dt_, k_ in ((-0.15, "fly"), (-0.05, "fly"), (0.05, "fly")):
     knock(69.3 + dt_, k_)
 coin_t(69.3)
-knock(69.7, "duck")
+knock(69.7, "fly")
 # ---- pipe -> WORLD 1-4: back on Bergenline, 83rd -> 84th, library
 mv_t(PIPES[2]["up"], PIPES[2]["up"] + 0.45, 20, 0, 28)
 label(72.4, "HURRY UP!", (255, 90, 90))
@@ -1303,17 +1312,15 @@ def popup_pos(t):
 
 def enemy_img(kind, w, t, flip_dir=True):
     if w == 3:
-        kind = {"pigeon": "goose", "rat": "duck", "cart": "goose"}.get(kind, kind)
+        kind = "fly"
     if w == 2 and kind == "pigeon":
         kind = "rat"
     if kind == "pigeon":
         return PIGEON[int(t * 5) % 2].transpose(Image.FLIP_LEFT_RIGHT), kind
     if kind == "rat":
         return RAT[int(t * 8) % 2], kind
-    if kind == "goose":
-        return GOOSE[int(t * 6) % 2], kind
-    if kind == "duck":
-        return DUCK[int(t * 6) % 2], kind
+    if kind == "fly":
+        return LANTERNFLY[int(t * 8) % 2], kind
     return CART, kind
 
 
@@ -1423,11 +1430,12 @@ def render():
                 for cx_ in np.arange(a_, b_ - 1, 18):
                     cw = int(min(18, b_ - cx_))
                     _paste_clip(frame, CRATES[(i + lvl) % 3].crop((0, 0, cw, 10)), int(cx_ - cam), GROUND - 10 - lvl * 10)
-        # ducks paddling on Woodcliff Lake
+        # spotted lanternflies fluttering over Woodcliff Lake
         if w == 3:
-            for k in range(6):
-                dx = (k * 61 + t * (6 + k)) % (W + 40) - 20
-                _paste_clip(frame, DUCK[int(t * 2 + k) % 2], int(dx), 222 + (k % 3) * 9)
+            for k in range(7):
+                dx = (k * 53 + t * (10 + 2 * k)) % (W + 40) - 20
+                dy = 214 + (k % 3) * 11 + 4 * math.sin(t * 5 + k)
+                _paste_clip(frame, LANTERNFLY[int(t * 7 + k) % 2], int(dx), int(dy))
         # pinata on a tree branch
         pnx, pny = PINATA_POS
         if w == 3:
@@ -1514,7 +1522,8 @@ def render():
                     ex += (e["t"] - t) * 12
                 elif kind == "cart":
                     ex += (e["t"] - t) * 18
-                _paste_clip(frame, img, int(ex - cam), GROUND - img.height)
+                bob = int(3 + 3 * math.sin(t * 9 + e["x"])) if kind == "fly" else 0
+                _paste_clip(frame, img, int(ex - cam), GROUND - img.height - bob)
                 continue
             dt = t - e["t"]
             if e["mode"] == "stomp":
