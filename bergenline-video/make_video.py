@@ -1077,8 +1077,8 @@ def over(tp, what, apex=36, dur=0.6):
         nets.append(xc - 13)
 
 
-def label(t, text, col=(255, 230, 90)):
-    labels.append((t, text, col))
+def label(t, text, col=(255, 230, 90), dur=1.1, y=104):
+    labels.append((t, text, col, dur, y))
 
 
 # ---- WORLD 1-1: Bergenline Ave, 72nd -> 83rd
@@ -1144,7 +1144,7 @@ mv_t(PIPES[1]["up"], PIPES[1]["up"] + 0.45, 20, 0, 28)
 peak(55.9, "coin")
 PIN_M = peak(T_PINATA, None, apex=40)
 PINATA_POS = (x_of_t(T_PINATA) + KW_t(T_PINATA) / 2 - 8, GROUND - (40 + 16) - 16)
-label(55.2, "STOMP THE LANTERNFLIES!", (255, 120, 120))
+label(55.2, "STOMP THE LANTERNFLIES!", (255, 120, 120), dur=4.0, y=90)
 label(T_PINATA, "PINATA!")
 label(T_CAFE + 0.05, "CAFECITO SPEED BOOST!")
 over(59.0, "net")
@@ -1634,9 +1634,9 @@ def render():
         for (st_, sx, sy, txt, col) in pops:
             if 0 <= t - st_ < 0.8:
                 draw_text(frame, int(sx - cam), int(sy - (t - st_) * 25), txt, col, shadow=(0, 0, 0))
-        for (lt, txt, col) in labels:
-            if 0 <= t - lt < 1.1:
-                yb = 104 - int(min(1, (t - lt) / 0.15) * 8)
+        for (lt, txt, col, ldur, ly) in labels:
+            if 0 <= t - lt < ldur:
+                yb = ly - int(min(1, (t - lt) / 0.15) * 8)
                 bw = text_w(txt) + 8
                 dr.rounded_rectangle([(W - bw) // 2, yb - 3, (W + bw) // 2, yb + 7], 2, fill=(20, 20, 40))
                 centered(frame, yb, txt, col)
