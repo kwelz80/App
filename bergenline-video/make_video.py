@@ -244,6 +244,20 @@ def make_car(col):
     return im
 
 
+def make_logo(size):
+    """North Bergen logo, cropped to its circle, scaled down with a round alpha mask."""
+    src = Image.open(OUT_DIR / "nb_logo.png").convert("RGB").crop((115, 115, 385, 385))
+    im = src.resize((size, size), Image.LANCZOS).convert("RGBA")
+    m = Image.new("L", (size * 8, size * 8), 0)
+    ImageDraw.Draw(m).ellipse([0, 0, size * 8 - 1, size * 8 - 1], fill=255)
+    im.putalpha(m.resize((size, size), Image.LANCZOS).point(lambda v: 255 if v > 110 else 0))
+    return im
+
+
+LOGO_FLAG = make_logo(20)
+LOGO_BANNER = make_logo(12)
+LOGO_CARD = make_logo(44)
+
 BUS = make_bus()
 CAR = make_car((240, 200, 40))
 
@@ -453,6 +467,13 @@ def build_level():
         d.rectangle([px, GROUND - 51, px + 42, GROUND - 39], outline=(255, 255, 255))
         draw_text(im, px + 3, GROUND - 49, "BERGENLINE", (255, 255, 255))
         draw_text(im, px + 2 + (40 - text_w(label)) // 2, GROUND - 43, label, (255, 255, 255))
+
+        # North Bergen banner on the light pole
+        bx, by = px + 2, GROUND - 34
+        d.rectangle([bx, by, bx + 15, by + 9], fill=(170, 30, 35))
+        d.rectangle([bx, by + 10, bx + 15, by + 19], fill=(250, 200, 40))
+        d.polygon([(bx, by + 20), (bx + 15, by + 20), (bx + 7, by + 23)], fill=(250, 200, 40))
+        im.alpha_composite(LOGO_BANNER, (bx + 2, by + 4))
 
     draw_library(im, d)
     return im
@@ -717,14 +738,15 @@ def render():
         dr.rectangle([pxs, GROUND - 108, pxs + 1, GROUND - 9], fill=(220, 220, 225))
         dr.ellipse([pxs - 2, GROUND - 113, pxs + 3, GROUND - 108], fill=(250, 200, 40))
         if t < T_GRAB:
-            fy = GROUND - 30
+            fy = GROUND - 34
         elif t < T_LAND:
-            fy = GROUND - 30 - (t - T_GRAB) / SLIDE * 72
+            fy = GROUND - 34 - (t - T_GRAB) / SLIDE * 72
         else:
-            fy = GROUND - 102
+            fy = GROUND - 106
         fy = int(fy)
-        dr.rectangle([pxs + 2, fy, pxs + 21, fy + 5], fill=(210, 30, 40))
-        dr.rectangle([pxs + 2, fy + 6, pxs + 21, fy + 12], fill=(255, 205, 30))
+        dr.rectangle([pxs + 2, fy, pxs + 33, fy + 11], fill=(170, 30, 35))
+        dr.rectangle([pxs + 2, fy + 12, pxs + 33, fy + 23], fill=(250, 200, 40))
+        _paste_clip(frame, LOGO_FLAG, pxs + 8, fy + 2)
 
 
         # hydrants
@@ -853,6 +875,7 @@ def render():
             ov = Image.new("RGBA", (W, H), (15, 15, 35, int(235 * a)))
             frame.alpha_composite(ov)
             if a >= 1.0:
+                _paste_clip(frame, LOGO_CARD, (W - 44) // 2, 46)
                 draw_text(frame, (W - text_w("BERGENLINE", 2)) // 2, 96, "BERGENLINE", (255, 210, 60), 2, (120, 40, 20))
                 draw_text(frame, (W - text_w("AVENUE", 2)) // 2, 110, "AVENUE", (255, 210, 60), 2, (120, 40, 20))
                 draw_text(frame, (W - text_w("NORTH BERGEN, NJ")) // 2, 128, "NORTH BERGEN, NJ", white)
