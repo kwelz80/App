@@ -261,10 +261,68 @@ LOGO_CARD = make_logo(44)
 BUS = make_bus()
 CAR = make_car((240, 200, 40))
 
+# ---------------------------------------------------------------- timeline
+# Everything is timed to the soundtrack of the reference video (reference_audio).
+# Score/coin events below were read frame by frame off that video's HUD, so each
+# action here lands on the same sound effect.
+DURATION = 91.4
+BEAT0, BEAT = 0.07, 60 / 133.5            # measured tempo of the song
+REF_SCORE = [  # (time, points)
+    (3.1, 200), (4.3, 100), (6.7, 200), (7.9, 1000), (9.7, 100), (11.37, 300), (11.5, 100),
+    (11.7, 200), (11.87, 200), (12.03, 200), (12.23, 300), (13.8, 500), (14.1, 500),
+    (20.3, 200), (21.1, 200), (21.7, 200), (22.3, 200), (24.1, 200), (24.4, 200), (24.7, 200),
+    (25.0, 200), (25.3, 200), (25.6, 200), (27.7, 100), (28.3, 100), (31.53, 200), (31.67, 200),
+    (31.77, 300), (31.87, 100), (32.97, 1200), (33.1, 200), (33.2, 200), (34.3, 200), (34.6, 200),
+    (36.4, 200), (37.9, 200), (38.63, 200), (38.9, 300), (39.3, 100), (41.0, 600), (41.33, 300),
+    (42.1, 300), (42.2, 200), (42.3, 200), (42.57, 200), (45.1, 200), (45.7, 50), (46.3, 50),
+    (46.9, 50), (47.5, 50), (47.67, 200), (48.1, 50), (48.63, 200), (48.83, 300), (48.97, 100),
+    (51.7, 100), (52.9, 100), (55.9, 200), (57.7, 100), (60.1, 1000), (60.9, 200), (61.3, 300),
+    (61.7, 100), (62.5, 200), (65.3, 200), (67.3, 2000), (69.3, 1800), (69.7, 200), (79.3, 5000),
+]
+T_RUN = 0.3
+V_BASE, V_BUS, V_HYPER = 34.0, 80.0, 58.0
+TB0, TB1 = 15.4, 19.2                     # bus ride
+TH0, TH1 = 60.1, 70.0                     # cafecito speed mode
+T_FINAL = 78.3                            # leap from the crates to the flagpole
+T_GRAB = 79.3                             # flagpole (5000) in the reference
+
+
+def speed_t(t):
+    if TB0 <= t < TB1:
+        return V_BUS
+    if TH0 <= t < TH1:
+        return V_HYPER
+    return V_BASE
+
+
+_ts = np.arange(0, DURATION + 0.01, 1 / 600)
+_xs = np.empty_like(_ts)
+_x = X0
+for _i, _t in enumerate(_ts):
+    _xs[_i] = _x
+    if T_RUN <= _t < T_FINAL:
+        _x += speed_t(_t) / 600
+TS, XS = _ts, _xs
+X_FINAL = float(np.interp(T_FINAL, TS, XS))
+
+
+def x_of_t(t):
+    return float(np.interp(t, TS, XS))
+
+
+def t_of_x(x):
+    i = np.searchsorted(XS, x)
+    return float(TS[min(i, len(TS) - 1)])
+
+
+POLE_X = int(X_FINAL + 112)
+LEVEL_W = POLE_X + 120
+
+
 # ---------------------------------------------------------------- level art
 # Cross streets from 72nd St (start) to 84th St (finish)
-CROSS = [(360, "74 ST"), (700, "77 ST"), (1240, "79 ST"), (1540, "81 ST"),
-         (1960, "83 ST"), (2380, "84 ST")]
+CROSS = [(int(x_of_t(16.2)), "74 ST"), (int(x_of_t(26.6)), "77 ST"), (int(x_of_t(43.5)), "79 ST"),
+         (int(x_of_t(55.0)), "81 ST"), (int(x_of_t(71.5)), "83 ST"), (int(X_FINAL + 40), "84 ST")]
 CROSS_W = 36
 
 # Generic placeholder storefronts (blocks with no verified listings)
@@ -304,7 +362,7 @@ BLOCK_81_83 = [
     ("WADI/SCOOPS", (120, 210, 230), (255, 255, 255), (250, 150, 190), (255, 255, 255), (210, 200, 230)),  # 8205
 ]
 
-LIB_X, LIB_W = 2456, 86          # Sai Rao Public Library, 8411 Bergenline
+LIB_X, LIB_W = POLE_X + 16, 86          # Sai Rao Public Library, 8411 Bergenline
 
 
 def store_min_w(store):
@@ -420,7 +478,15 @@ def build_level():
     for si, (a, b) in enumerate(zip(seg_starts, seg_ends)):
         L = b - a
         if si in real:
-            stores = real[si]
+            # real listings in address order; unverified storefronts fill the gaps
+            stores = list(real[si])
+            k = 1
+            while sum(store_min_w(s) for s in stores) + 50 <= L:
+                stores.insert(min(k, len(stores)), GENERIC[gi % len(GENERIC)])
+                gi += 1
+                k += 2
+                if k > len(stores):
+                    k = 1
         else:
             n = max(1, L // 50)
             stores = [GENERIC[(gi + k) % len(GENERIC)] for k in range(n)]
@@ -614,77 +680,47 @@ for hc in HYPER_COLS:
                   "jump": recolor(BIG["jump"], PAL["T"][:3], hc)})
 
 # ---------------------------------------------------------------- choreography
-POLE_X = 2440
-BUS_SPEED, HYPER_SPEED = 90.0, 72.0
-X_BIG = 206                       # pastelito collected -> big
-XB0, XB1 = 1086, 1206             # riding the bus
-XH0, XH1 = 1480, 1900             # cafecito hyper mode
-X_FINAL = 2326                    # top of the crate stairs
+T_BIG = 7.9                       # pastelito collected (1000 in the reference)
+T_POWER_HIT = 6.7
+T_PINATA, T_CAFE = 57.7, TH0
+X_BIG = x_of_t(T_BIG)
+XB0, XB1 = x_of_t(TB0), x_of_t(TB1)
+XH0, XH1 = x_of_t(TH0), x_of_t(TH1)
+ROOF = -8                          # bus roof height (bus drawn at y=204)
 
 
-def kid_big(x):
-    return x >= X_BIG
+def kid_big_t(t):
+    return t >= T_BIG
 
 
-def KW(x):
-    return 18 if kid_big(x) else 12
+def KW_t(t):
+    return 18 if kid_big_t(t) else 12
 
 
-def KH(x):
-    return 24 if kid_big(x) else 16
+def KH_t(t):
+    return 24 if kid_big_t(t) else 16
 
 
-def speed_at(x):
-    if XB0 <= x < XB1:
-        return BUS_SPEED
-    if XH0 <= x < XH1:
-        return HYPER_SPEED
-    return SPEED
+moves = []        # x-domain jumps
+coins = []        # dict(x, hb, t)
+blocks = []       # dict(x, y, kind, t)
+enemies = []      # dict(kind, x, mode, t)
+hydrants, carts, cellars, ledges, sheds = [], [], [], [], []
+brick_rows = []
+steps = []
 
 
-# precise x(t) for the run
-_ts, _xs = [], []
-_x, _t, _dt = X0, T_RUN, 1 / 600
-while _x < X_FINAL:
-    _ts.append(_t); _xs.append(_x)
-    _x = min(X_FINAL, _x + speed_at(_x) * _dt)
-    _t += _dt
-_ts.append(_t); _xs.append(_x)
-TS, XS = np.array(_ts), np.array(_xs)
-T_FINAL = float(TS[-1])
-
-
-def x_of_t(t):
-    return float(np.interp(t, TS, XS))
-
-
-def t_of_x(x):
-    return float(np.interp(x, XS, TS))
-
-
-moves = []        # x0, x1, h0, h1, apex, b, xpeak
-coins = []        # dict(x, hb, got)
-blocks = []       # dict(x, y, kind, hit_t, x_trig)
-enemies = []      # dict(kind, x, mode('stomp'|'knock'), x_trig, t_hit, score)
-score_pops = []
-sfx = []
-statics = []      # draw callbacks for platforms etc.
-
-
-def mv(x0, x1, h0, h1, apex):
+def mv_t(t0, t1, h0, h1, apex):
+    x0, x1 = x_of_t(t0), x_of_t(t1)
     lo, hi = 0.0, 400.0
-    for _ in range(60):
+    ps = np.linspace(0, 1, 201)
+    for _ in range(50):
         b = (lo + hi) / 2
-        ps = np.linspace(0, 1, 201)
-        m = (h0 + (h1 - h0) * ps + 4 * b * ps * (1 - ps)).max()
-        if m < apex:
+        if (h0 + (h1 - h0) * ps + 4 * b * ps * (1 - ps)).max() < apex:
             lo = b
         else:
             hi = b
-    ps = np.linspace(0, 1, 401)
-    hs = h0 + (h1 - h0) * ps + 4 * b * ps * (1 - ps)
-    pk = float(ps[hs.argmax()])
-    m = dict(x0=x0, x1=x1, h0=h0, h1=h1, apex=apex, b=b, xpeak=x0 + pk * (x1 - x0))
+    m = dict(x0=x0, x1=x1, h0=h0, h1=h1, apex=apex, b=b, t0=t0, t1=t1)
     moves.append(m)
     return m
 
@@ -694,119 +730,133 @@ def move_h(m, x):
     return m["h0"] + (m["h1"] - m["h0"]) * p + 4 * m["b"] * p * (1 - p)
 
 
-def block_at_peak(m, kind):
-    xp = m["xpeak"]
-    bx = xp + KW(xp) / 2 - 6
-    by = GROUND - (m["apex"] + KH(xp)) - 12
-    blocks.append(dict(x=bx, y=by, kind=kind, hit_t=None, x_trig=xp))
+def peak(tp, kind=None, h=0, apex=None, dur=0.56):
+    """jump whose top is at time tp; optional block hit there"""
+    apex = apex if apex is not None else h + 38
+    m = mv_t(tp - dur / 2, tp + dur / 2, h, h, apex)
+    if kind:
+        xp = x_of_t(tp)
+        blocks.append(dict(x=xp + KW_t(tp) / 2 - 6, y=int(GROUND - (apex + KH_t(tp)) - 12),
+                           kind=kind, t=tp))
+    return m
 
 
-def coin_row(x1, x2, hb, step=10):
-    for cx in range(int(x1), int(x2) + 1, step):
-        coins.append(dict(x=cx, hb=hb, got=None))
+def land_on(tl, kind, h=0, dur=0.55, apex=None):
+    """jump that lands on an enemy at time tl"""
+    mv_t(tl - dur, tl, h, h, apex if apex is not None else h + 28)
+    xl = x_of_t(tl)
+    ew = 10 if kind == "pigeon" else 12
+    enemies.append(dict(kind=kind, x=xl + KW_t(tl) / 2 - ew / 2, mode="stomp", t=tl))
 
 
-def coin_arc(m, n=4):
-    for k in range(1, n + 1):
-        p = k / (n + 1)
-        x = m["x0"] + p * (m["x1"] - m["x0"])
-        coins.append(dict(x=x + KW(x) / 2 - 3, hb=move_h(m, x) + KH(x) / 2 - 4, got=None))
+def knock(t, kind):
+    enemies.append(dict(kind=kind, x=x_of_t(t) + KW_t(t) - 4, mode="knock", t=t))
 
 
-def stomp(kind, m, score=100):
-    xl = m["x1"]
-    ew = 12 if kind != "pigeon" else 10
-    enemies.append(dict(kind=kind, x=xl + KW(xl) / 2 - ew / 2, mode="stomp",
-                        x_trig=xl - 3, t_hit=None, score=score))
+def coin_t(*ts):
+    for t in ts:
+        coins.append(dict(t=t))      # placed after all moves exist
 
 
-def knock(kind, x):
-    enemies.append(dict(kind=kind, x=x, mode="knock", x_trig=x - 16, t_hit=None, score=200))
+def over(tp, what, apex=36, dur=0.6):
+    """filler jump over a street obstacle, top on a beat"""
+    tp = BEAT0 + round((tp - BEAT0) / BEAT) * BEAT
+    mv_t(tp - dur / 2, tp + dur / 2, 0, 0, apex)
+    xc = x_of_t(tp) + KW_t(tp) / 2
+    if what == "hydrant":
+        hydrants.append(xc - 4)
+    elif what == "cart":
+        carts.append((tp, xc))
+    elif what == "cellar":
+        cellars.append((xc - 12, xc + 12))
 
 
-# --- A: 72nd-74th: pastelito power-up, pigeon bounce chain
-coin_row(60, 120, 0)
-block_at_peak(mv(126, 156, 0, 0, 32), "coin")
-POWER_MOVE = mv(166, 196, 0, 0, 32)
-block_at_peak(POWER_MOVE, "pastelito")
-stomp("pigeon", mv(240, 266, 0, 0, 30), 100)
-stomp("pigeon", mv(266, 294, 0, 0, 26), 200)
-stomp("pigeon", mv(294, 324, 0, 0, 28), 400)
-mv(324, 346, 0, 0, 12)
-
-# --- B: 74th-77th: brick ledge with coins, hydrant spray, rat
-PLAT_B = (424, 520, 30)
-mv(400, 432, 0, 30, 46)
-coin_row(436, 512, 32)
-block_at_peak(mv(460, 486, 30, 30, 40), "brick")
-mv(520, 550, 30, 0, 38)
-HYDRANT_X = 608
-coin_arc(mv(582, 628, 0, 0, 42))
-stomp("rat", mv(650, 676, 0, 0, 26), 100)
-
-# --- C: 77th-79th: sidewalk shed run, block row, cart, bus ride
-SHED = (770, 900, 34)
-mv(746, 776, 0, 34, 48)
-coin_row(784, 812, 36)
-coin_arc(mv(818, 846, 34, 34, 58))
-coin_row(852, 892, 36)
-mv(900, 930, 34, 0, 44)
-m1 = mv(944, 972, 0, 0, 40)
-block_at_peak(m1, "coin")
-m2 = mv(980, 1008, 0, 0, 40)
-block_at_peak(m2, "brick")
-DECOR_BRICKS = [(blocks[-2]["x"] + 12, blocks[-2]["y"]), (blocks[-2]["x"] + 24, blocks[-2]["y"])]
-CART_APEX = []
-cm = mv(1018, 1048, 0, 0, 34); CART_APEX.append(cm["xpeak"]); coin_arc(cm, 3)
-ROOF = -8                # bus roof (bus drawn at y=204)
-mv(1062, XB0, 0, ROOF, 12)
-coin_row(1100, 1134, ROOF + 8)
-coin_arc(mv(1140, 1172, ROOF, ROOF, 18))
-coin_row(1178, 1200, ROOF + 8)
-mv(XB1, 1236, ROOF, 0, 12)
-
-# --- D: 79th-81st: hidden 1UP, cellar doors, rat, pinata -> cafecito
-block_at_peak(mv(1290, 1318, 0, 0, 38), "oneup")
-CELLAR = (1352, 1378)
-coin_arc(mv(1338, 1386, 0, 0, 32))
-stomp("rat", mv(1394, 1420, 0, 0, 24), 100)
-PIN_MOVE = mv(1434, 1464, 0, 0, 40)
-PINATA_POS = (PIN_MOVE["xpeak"] + KW(1450) / 2 - 8, GROUND - (40 + 24) - 16)
-
-# --- E: 81st-83rd hyper run
-for kind, x in [("rat", 1524), ("pigeon", 1600), ("cart", 1650), ("pigeon", 1690),
-                ("rat", 1760), ("rat", 1790), ("pigeon", 1830), ("cart", 1880)]:
-    knock(kind, x)
-coin_row(1604, 1700, 0, 12)
-coin_arc(mv(1716, 1766, 0, 0, 38), 5)
-coin_arc(mv(1846, 1886, 0, 0, 30), 4)
-
-# --- F: 83rd-84th: blocks, pigeon, cart, crate stairs, flagpole
-block_at_peak(mv(2010, 2038, 0, 0, 40), "coin")
-block_at_peak(mv(2046, 2074, 0, 0, 40), "coin")
-stomp("pigeon", mv(2100, 2126, 0, 0, 26), 200)
-coin_arc(mv(2150, 2190, 0, 0, 42), 5)
-cm = mv(2206, 2236, 0, 0, 34); CART_APEX.append(cm["xpeak"])
-STEPS = [(2250, 10), (2268, 20), (2286, 30), (2304, 40), (2322, 40)]
-mv(2232, 2250, 0, 10, 18)
-mv(2250, 2268, 10, 20, 28)
-mv(2268, 2286, 20, 30, 38)
-mv(2286, 2304, 30, 40, 48)
-coin_row(2308, 2320, 42, 12)
+# ---- 72nd -> 74th
+over(1.6, "hydrant")
+peak(3.1, "coin")                                   # 200 + coin
+land_on(4.3, "pigeon")                              # 100
+over(5.3, "cart", 34, 0.56)
+peak(T_POWER_HIT, "pastelito")                      # block -> pastelito, grab at 7.9
+land_on(9.7, "rat")
+mv_t(10.55, 11.05, 0, 30, 44)                       # up onto the brick ledge
+coin_t(11.37, 11.5, 11.7, 11.87, 12.03, 12.23)
+mv_t(12.45, 12.95, 30, 0, 40)
+ledges.append((x_of_t(10.95) - 4, x_of_t(12.5) + 18, 30))
+land_on(13.8, "pigeon")                             # 500
+land_on(14.1, "pigeon", dur=0.3, apex=14)           # 500 bounce
+# ---- bus ride
+mv_t(14.9, TB0, 0, ROOF, 10)
+mv_t(16.95, 17.45, ROOF, ROOF, ROOF + 20)
+mv_t(TB1, 19.65, ROOF, 0, 6)
+land_on(20.3, "rat")
+peak(21.1, "coin", dur=0.52); peak(21.7, "coin", dur=0.52); peak(22.3, "coin", dur=0.52)
+# ---- sidewalk shed run
+mv_t(23.3, 23.8, 0, 34, 48)
+coin_t(24.1, 24.4, 24.7, 25.0, 25.3, 25.6)
+mv_t(25.85, 26.35, 34, 0, 42)
+sheds.append((x_of_t(23.6), x_of_t(26.05) + 10, 34))
+land_on(27.7, "rat")
+land_on(28.3, "pigeon", dur=0.5, apex=22)
+peak(30.03, "coin")
+mv_t(31.25, 32.15, 0, 0, 46)
+coin_t(31.53, 31.67, 31.77, 31.87, 32.07)
+land_on(32.97, "pigeon")
+coin_t(33.07, 33.2, 34.3, 34.43, 34.6)
+peak(35.13, "coin")
+land_on(36.4, "rat")
+peak(37.9, "coin")
+mv_t(38.35, 39.3, 0, 0, 44)
+coin_t(38.63, 38.87, 39.23)
+enemies.append(dict(kind="pigeon", x=x_of_t(39.3) + KW_t(39.3) / 2 - 5, mode="stomp", t=39.3))
+coin_t(39.53)
+mv_t(40.45, 41.45, 0, 0, 40)
+coin_t(40.67, 40.77, 41.0, 41.1, 41.33)
+coin_t(42.1, 42.2, 42.3, 42.53)
+land_on(45.1, "rat")
+# ---- brick breaking run
+BRICK_TS = [45.7, 46.3, 46.9, 47.5, 48.1]
+for tb in BRICK_TS:
+    peak(tb, "brick", dur=0.56, apex=40)
+coin_t(46.7, 47.17, 47.67)
+brick_rows.append((blocks[-5]["x"] - 12, blocks[-1]["x"] + 24, blocks[-1]["y"]))
+mv_t(48.45, 48.97, 0, 0, 30)
+coin_t(48.63, 48.8)
+enemies.append(dict(kind="rat", x=x_of_t(48.97) + 3, mode="stomp", t=48.97))
+peak(49.9, "coin")
+land_on(51.7, "pigeon")
+land_on(52.9, "rat")
+over(54.2, "cellar", 32, 0.7)
+peak(55.9, "coin")
+PIN_M = peak(T_PINATA, None, apex=40)                # pinata (100), cafecito caught at 60.1
+PINATA_POS = (x_of_t(T_PINATA) + KW_t(T_PINATA) / 2 - 8, GROUND - (40 + 24) - 16)
+over(59.0, "hydrant")
+# ---- cafecito speed mode
+knock(60.9, "rat"); knock(61.3, "pigeon"); knock(61.7, "cart"); knock(62.5, "rat")
+over(63.9, "cart", 38, 0.5)
+knock(65.3, "pigeon")
+over(66.3, "hydrant", 38, 0.5)
+for dt_, k_ in ((-0.15, "rat"), (-0.05, "pigeon"), (0.05, "rat")):
+    knock(67.3 + dt_, k_)
+coin_t(67.3)
+for dt_, k_ in ((-0.15, "pigeon"), (-0.05, "rat"), (0.05, "pigeon")):
+    knock(69.3 + dt_, k_)
+coin_t(69.3)
+knock(69.7, "rat")
+# ---- 83rd -> 84th: obstacles on the beat, crate stairs, flagpole
+over(71.2, "cart", 34)
+over(72.6, "hydrant")
+over(74.0, "cellar", 32, 0.7)
+st = [75.6, 76.13, 76.66, 77.19, 77.72]
+for i in range(4):
+    mv_t(st[i], st[i + 1], i * 10, (i + 1) * 10, (i + 1) * 10 + 8)
+for i in range(4):
+    x_a = x_of_t(st[i + 1]) - 2
+    x_b = x_of_t(st[i + 2]) - 2 if i < 3 else X_FINAL + 22
+    steps.append((x_a, x_b, (i + 1) * 10))
 
 moves.sort(key=lambda m: m["x0"])
-FJ_DUR = 1.0
-GRAB_X = POLE_X - 18 + 2
-GRAB_H = 72
-T_GRAB = T_FINAL + FJ_DUR
-SLIDE = 1.1
-T_LAND = T_GRAB + SLIDE
-DOOR_X = LIB_X + LIB_W // 2 - 9
-WALK = 2.0
-T_CLEAR = T_LAND + WALK
-TALLY = 2.4
-T_END = T_CLEAR + TALLY
-DURATION = T_END + 3.5
+for a_, b_ in zip(moves, moves[1:]):
+    assert a_["x1"] <= b_["x0"] + 0.01, (a_["t0"], b_["t0"])
 
 
 def run_height(x):
@@ -819,14 +869,29 @@ def run_height(x):
     return h, False
 
 
+for c in coins:
+    x = x_of_t(c["t"])
+    h, _ = run_height(x)
+    c["x"] = x + KW_t(c["t"]) / 2 - 3
+    c["hb"] = h + KH_t(c["t"]) / 2 - 4
+
+FJ_DUR = T_GRAB - T_FINAL
+GRAB_X = POLE_X - 16
+GRAB_H = 72
+SLIDE = 1.1
+T_LAND = T_GRAB + SLIDE
+DOOR_X = LIB_X + LIB_W // 2 - 9
+T_CLEAR = 82.07                   # tally runs 82.37 -> 85.77 like the reference
+T_END = 85.9
+
+
 def player_state(t):
-    """x, height above ground, pose"""
     if t < T_RUN:
         return X0, 0, "stand"
     if t < T_FINAL:
         x = x_of_t(t)
         h, air = run_height(x)
-        if not air and XB0 <= x < XB1:
+        if not air and TB0 <= t < TB1:
             return x, h, "stand"
         return x, h, "jump" if air else "run"
     if t < T_GRAB:
@@ -837,7 +902,7 @@ def player_state(t):
     if t < T_LAND:
         p = (t - T_GRAB) / SLIDE
         return GRAB_X, GRAB_H * (1 - p), "pole"
-    if t < T_CLEAR:
+    if t < T_CLEAR + 1.5:
         if t - T_LAND < 0.25:
             return POLE_X + 2, 0, "stand"
         x = POLE_X + 2 + (t - T_LAND - 0.25) * 34
@@ -850,12 +915,19 @@ def camera(px):
 
 
 def bus_x(t):
-    tb0, tb1 = t_of_x(XB0), t_of_x(XB1)
-    if t < tb0:
-        return XB0 - 23 - BUS_SPEED * (tb0 - t)
-    if t < tb1:
+    if t < TB0:
+        return XB0 - 23 - V_BUS * (TB0 - t)
+    if t < TB1:
         return x_of_t(t) - 23
-    return XB1 - 23 + BUS_SPEED * (t - tb1)
+    return XB1 - 23 + V_BUS * (t - TB1)
+
+
+def score_at(t):
+    return sum(d for tt, d in REF_SCORE if tt <= t)
+
+
+def time_at(t):
+    return max(0, 400 - int(t * 2.45))
 
 
 # ---------------------------------------------------------------- render
@@ -879,6 +951,12 @@ def item_path(t, t0, p0, t1, p1, bump):
     return p0[0] + (p1[0] - p0[0]) * k, p0[1] + (p1[1] - p0[1]) * k - bump * math.sin(math.pi * k)
 
 
+def popup_pos(t):
+    x = x_of_t(min(t, T_FINAL))
+    h, _ = run_height(x)
+    return x, GROUND - h - KH_t(t) - 10
+
+
 def render():
     import os
     prev = os.environ.get("PREVIEW")
@@ -889,79 +967,32 @@ def render():
          "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
          str(OUT_DIR / "_video.mp4")], stdin=subprocess.PIPE)
     n = int(DURATION * FPS)
-    score, ncoins, time_left = 0, 0, 300
-    triggered = set()
-    t_power = t_cafe = t_pinata = None
-    grow_t = None
     trail = []
     rng = random.Random(9)
-    t_pow_collect = t_of_x(X_BIG)
-    t_cafe_collect = t_of_x(XH0)
+    pops = []
+    for (tt, d) in REF_SCORE:
+        if tt == T_GRAB:
+            pops.append((tt, POLE_X + 4, GROUND - GRAB_H - 20, str(d), (255, 255, 255)))
+        else:
+            px_, py_ = popup_pos(tt)
+            txt = "CAFECITO!" if tt == T_CAFE else str(d)
+            col = (255, 220, 60) if tt == T_CAFE else (255, 255, 255)
+            pops.append((tt, px_, py_, txt, col))
+    pb = [b for b in blocks if b["kind"] == "pastelito"][0]
     for fi in range(n):
         t = fi / FPS
         px, ph, pose = player_state(t)
         cam = camera(px)
         feet = GROUND - ph
-        kw, kh = KW(px), KH(px)
-        prect = (px + 1, feet - kh, px + kw - 1, feet)
-        hyper = XH0 <= px < XH1 and T_RUN <= t < T_FINAL
-
-        # ---------------- events
-        if T_RUN <= t < T_FINAL:
-            for i, m in enumerate(moves):
-                if m["x0"] <= px < m["x1"] and ("j", i) not in triggered:
-                    triggered.add(("j", i)); sfx.append((t, "jump"))
-        if t >= T_FINAL and ("fj",) not in triggered:
-            triggered.add(("fj",)); sfx.append((t, "jump"))
-        for b in blocks:
-            if b["hit_t"] is None and t < T_FINAL and px >= b["x_trig"] and t >= T_RUN:
-                b["hit_t"] = t
-                sfx.append((t, "bump"))
-                if b["kind"] == "coin":
-                    score += 200; ncoins += 1; sfx.append((t + 0.02, "coin"))
-                    score_pops.append((t, b["x"], b["y"] - 10, "200", (255, 255, 255)))
-                elif b["kind"] == "brick":
-                    score += 50; sfx.append((t, "break"))
-                elif b["kind"] == "oneup":
-                    sfx.append((t + 0.05, "oneup"))
-                    score_pops.append((t, b["x"] - 2, b["y"] - 10, "1UP", (120, 255, 120)))
-                elif b["kind"] == "pastelito":
-                    t_power = t; sfx.append((t + 0.03, "sprout"))
-        if t_power is not None and t >= t_pow_collect and ("grow",) not in triggered:
-            triggered.add(("grow",)); grow_t = t; score += 1000; sfx.append((t, "powerup"))
-            score_pops.append((t, px, feet - 30, "1000", (255, 255, 255)))
-        if t_pinata is None and t < T_FINAL and px >= PIN_MOVE["xpeak"] and t >= T_RUN:
-            t_pinata = t; score += 500; sfx.append((t, "pinata"))
-            score_pops.append((t, PINATA_POS[0], PINATA_POS[1] - 8, "500", (255, 255, 255)))
-        if t_pinata is not None and t >= t_cafe_collect and ("hyper",) not in triggered:
-            triggered.add(("hyper",)); score += 1000; sfx.append((t, "powerup"))
-            score_pops.append((t, px, feet - 30, "CAFECITO!", (255, 220, 60)))
-        for c in coins:
-            cy = GROUND - c["hb"] - 8
-            if c["got"] is None and t >= T_RUN and prect[0] < c["x"] + 6 and prect[2] > c["x"] and \
-                    prect[1] < cy + 8 and prect[3] > cy:
-                c["got"] = t; score += 100; ncoins += 1; sfx.append((t, "coin"))
-        chain = 0
-        for e in enemies:
-            if e["t_hit"] is None and px >= e["x_trig"] and T_RUN <= t < T_FINAL:
-                e["t_hit"] = t; score += e["score"]
-                sfx.append((t, "stomp" if e["mode"] == "stomp" else "kick"))
-                score_pops.append((t, e["x"], GROUND - 24, str(e["score"]), (255, 255, 255)))
-        if T_RUN <= t < T_GRAB:
-            time_left = 300 - int((t - T_RUN) / 0.4)
-        if t >= T_GRAB and ("grab",) not in triggered:
-            triggered.add(("grab",)); score += 5000; sfx.append((t, "pole"))
-            score_pops.append((t, POLE_X + 4, GROUND - GRAB_H - 20, "5000", (255, 255, 255)))
-        if t >= T_LAND and ("fan",) not in triggered:
-            triggered.add(("fan",)); sfx.append((t, "fanfare"))
-        if T_CLEAR + 0.3 <= t and time_left > 0:
-            per = max(1, int(time_left / max(1, (T_END - 0.4 - t) * FPS)))
-            per = min(per, time_left)
-            time_left -= per; score += per * 50
-            if fi % 2 == 0:
-                sfx.append((t, "tick"))
-        if hyper and fi % 6 == 0:
-            sfx.append((t, "sparkle"))
+        hyper = TH0 <= t < TH1
+        score = score_at(t)
+        ncoins = sum(1 for c in coins if c["t"] <= t) + sum(1 for b in blocks if b["kind"] == "coin" and b["t"] <= t)
+        time_left = time_at(min(t, T_GRAB))
+        if t >= T_CLEAR + 0.3:
+            k = min(1.0, (t - T_CLEAR - 0.3) / (85.77 - T_CLEAR - 0.3))
+            done = int(time_left * k)
+            score += done * 50
+            time_left -= done
 
         # ---------------- background
         frame = Image.new("RGBA", (W, H), (106, 168, 255, 255))
@@ -976,42 +1007,46 @@ def render():
         _paste_clip(frame, LEVEL, -cam, 0)
 
         # ---------------- street props
-        # cellar doors (open hatch in the sidewalk)
-        cx0, cx1 = CELLAR[0] - cam, CELLAR[1] - cam
-        dr.rectangle([cx0, GROUND, cx1, GROUND + 9], fill=(20, 18, 22))
-        dr.polygon([(cx0 - 6, GROUND - 12), (cx0, GROUND), (cx0 + 2, GROUND), (cx0 - 4, GROUND - 12)], fill=(130, 130, 140))
-        dr.polygon([(cx1 + 6, GROUND - 12), (cx1, GROUND), (cx1 - 2, GROUND), (cx1 + 4, GROUND - 12)], fill=(130, 130, 140))
-        # brick ledge
-        for bx in range(PLAT_B[0], PLAT_B[1], 12):
-            _paste_clip(frame, BRICK, bx - cam, GROUND - PLAT_B[2])
-        # sidewalk shed
-        sx0, sx1, sh_ = SHED[0] - cam, SHED[1] - cam, SHED[2]
-        for postx in range(sx0 + 2, sx1, 22):
-            dr.rectangle([postx, GROUND - sh_ + 8, postx + 1, GROUND - 1], fill=(110, 110, 120))
-        dr.rectangle([sx0, GROUND - sh_, sx1, GROUND - sh_ + 8], fill=(40, 110, 60))
-        dr.line([sx0, GROUND - sh_, sx1, GROUND - sh_], fill=(90, 170, 100))
-        for k in range(sx0 + 4, sx1 - 50, 64):
-            draw_text(frame, k, GROUND - sh_ + 2, "POST NO BILLS", (230, 240, 230))
-        # hydrant + spray
-        _paste_clip(frame, HYDRANT, HYDRANT_X - cam, GROUND - 12)
-        for k in range(10):
-            ph_ = (t * 1.6 + k / 10) % 1
-            for side in (-1, 1):
-                wx = HYDRANT_X + 4 + side * ph_ * 16 - cam
-                wy = GROUND - 9 - 18 * 4 * ph_ * (1 - ph_) * 0.6
-                dr.rectangle([wx, wy, wx + 1, wy + 1], fill=(150, 210, 255))
-        # crate stairs
-        for i, (sx, sh2) in enumerate(STEPS):
-            for lvl in range(sh2 // 10):
-                _paste_clip(frame, CRATES[(i + lvl) % 3], sx - cam, GROUND - 10 - lvl * 10)
-        # pinata (string + star)
+        for (a_, b_) in cellars:
+            cx0, cx1 = a_ - cam, b_ - cam
+            if cx1 < -10 or cx0 > W + 10:
+                continue
+            dr.rectangle([cx0, GROUND, cx1, GROUND + 9], fill=(20, 18, 22))
+            dr.polygon([(cx0 - 6, GROUND - 12), (cx0, GROUND), (cx0 + 2, GROUND), (cx0 - 4, GROUND - 12)], fill=(130, 130, 140))
+            dr.polygon([(cx1 + 6, GROUND - 12), (cx1, GROUND), (cx1 - 2, GROUND), (cx1 + 4, GROUND - 12)], fill=(130, 130, 140))
+        for (a_, b_, hh) in ledges:
+            for bx in np.arange(a_, b_, 12):
+                _paste_clip(frame, BRICK, int(bx - cam), GROUND - hh)
+        for (a_, b_, hh) in sheds:
+            sx0, sx1 = int(a_ - cam), int(b_ - cam)
+            for postx in range(sx0 + 2, sx1, 22):
+                dr.rectangle([postx, GROUND - hh + 8, postx + 1, GROUND - 1], fill=(110, 110, 120))
+            dr.rectangle([sx0, GROUND - hh, sx1, GROUND - hh + 8], fill=(40, 110, 60))
+            dr.line([sx0, GROUND - hh, sx1, GROUND - hh], fill=(90, 170, 100))
+            for k in range(sx0 + 4, sx1 - 50, 64):
+                draw_text(frame, k, GROUND - hh + 2, "POST NO BILLS", (230, 240, 230))
+        for hx in hydrants:
+            if -20 < hx - cam < W + 20:
+                _paste_clip(frame, HYDRANT, int(hx - cam), GROUND - 12)
+                for k in range(10):
+                    ph_ = (t * 1.6 + k / 10) % 1
+                    for side in (-1, 1):
+                        wx = hx + 4 + side * ph_ * 16 - cam
+                        wy = GROUND - 9 - 18 * 4 * ph_ * (1 - ph_) * 0.6
+                        dr.rectangle([wx, wy, wx + 1, wy + 1], fill=(150, 210, 255))
+        for i, (a_, b_, hh) in enumerate(steps):
+            for lvl in range(hh // 10):
+                for cx_ in np.arange(a_, b_ - 1, 18):
+                    cw = int(min(18, b_ - cx_))
+                    _paste_clip(frame, CRATES[(i + lvl) % 3].crop((0, 0, cw, 10)), int(cx_ - cam), GROUND - 10 - lvl * 10)
+        # pinata
         pnx, pny = PINATA_POS
-        if t_pinata is None:
+        if t < T_PINATA:
             sway = math.sin(t * 3) * 2
             dr.line([pnx + 8 - cam, 60, pnx + 8 + sway - cam, pny], fill=(240, 240, 240))
             _paste_clip(frame, PINATA, int(pnx + sway - cam), int(pny))
         else:
-            dt = t - t_pinata
+            dt = t - T_PINATA
             dr.line([pnx + 8 - cam, 60, pnx + 8 - cam, pny - 10], fill=(240, 240, 240))
             if dt < 1.0:
                 r2 = random.Random(4)
@@ -1023,51 +1058,51 @@ def render():
                     dr.rectangle([cxp, cyp, cxp + 1, cyp + 1], fill=col)
 
         # ---------------- blocks
+        for (a_, b_, by) in brick_rows:
+            for bx in np.arange(a_, b_, 12):
+                if any(b["kind"] == "brick" and abs(b["x"] - bx) < 6 for b in blocks):
+                    continue
+                _paste_clip(frame, BRICK, int(bx - cam), by)
         for b in blocks:
-            if b["kind"] == "brick" and b["hit_t"] is not None:
-                dt = t - b["hit_t"]
+            hit = t >= b["t"]
+            if b["kind"] == "brick" and hit:
+                dt = t - b["t"]
                 if dt < 1.0:
-                    for k, (vx, vy) in enumerate([(-30, -60), (30, -60), (-20, -30), (20, -30)]):
+                    for (vx, vy) in [(-30, -60), (30, -60), (-20, -30), (20, -30)]:
                         fx = b["x"] + 3 + vx * dt - cam
                         fy = b["y"] + 3 + vy * dt + 180 * dt * dt
                         dr.rectangle([fx, fy, fx + 3, fy + 3], fill=(200, 90, 50))
                 continue
-            bump = 0
-            if b["hit_t"] is not None and t - b["hit_t"] < 0.16:
-                bump = -int(4 * math.sin((t - b["hit_t"]) / 0.16 * math.pi))
-            if b["kind"] == "oneup" and b["hit_t"] is None:
-                continue
-            img = BRICK if b["kind"] == "brick" else (BLOCK_USED if b["hit_t"] is not None else BLOCK)
+            bump = -int(4 * math.sin((t - b["t"]) / 0.16 * math.pi)) if 0 <= t - b["t"] < 0.16 else 0
+            img = BRICK if b["kind"] == "brick" else (BLOCK_USED if hit else BLOCK)
             _paste_clip(frame, img, int(b["x"] - cam), b["y"] + bump)
-            if b["kind"] == "coin" and b["hit_t"] is not None and t - b["hit_t"] < 0.45:
-                k = (t - b["hit_t"]) / 0.45
+            if b["kind"] == "coin" and hit and t - b["t"] < 0.45:
+                k = (t - b["t"]) / 0.45
                 cy = b["y"] - 10 - 28 * math.sin(k * math.pi * 0.9)
                 _paste_clip(frame, COIN_FRAMES[int(t * 20) % 4], int(b["x"] + 3 - cam), int(cy))
-        for (bx, by) in DECOR_BRICKS:
-            _paste_clip(frame, BRICK, int(bx - cam), by)
 
         # ---------------- power-up items
-        if t_power is not None and t < t_pow_collect:
-            pb = [b for b in blocks if b["kind"] == "pastelito"][0]
-            if t - t_power < 0.3:
-                ix, iy = pb["x"] + 1, pb["y"] - 7 * (t - t_power) / 0.3
+        if T_POWER_HIT <= t < T_BIG:
+            if t - T_POWER_HIT < 0.3:
+                ix, iy = pb["x"] + 1, pb["y"] - 7 * (t - T_POWER_HIT) / 0.3
             else:
-                ix, iy = item_path(t, t_power + 0.3, (pb["x"] + 1, pb["y"] - 7),
-                                   t_pow_collect, (X_BIG + 4, GROUND - 14), 8)
+                ix, iy = item_path(t, T_POWER_HIT + 0.3, (pb["x"] + 1, pb["y"] - 7),
+                                   T_BIG, (X_BIG + 8, GROUND - 14), 6)
             _paste_clip(frame, PASTELITO, int(ix - cam), int(iy))
-        if t_pinata is not None and t < t_cafe_collect:
-            ix, iy = item_path(t, t_pinata, (PINATA_POS[0] + 4, PINATA_POS[1] + 4),
-                               t_cafe_collect, (XH0 + 6, GROUND - 16), 16)
+        if T_PINATA <= t < T_CAFE:
+            ix, iy = item_path(t, T_PINATA, (PINATA_POS[0] + 4, PINATA_POS[1] + 4),
+                               T_CAFE, (XH0 + 6, GROUND - 16), 22)
             _paste_clip(frame, CAFECITO, int(ix - cam), int(iy))
 
         # ---------------- coins
         for c in coins:
             cy = GROUND - c["hb"] - 8
-            if c["got"] is None:
-                f = COIN_FRAMES[int(t * 8 + c["x"] * 0.1) % 4]
-                _paste_clip(frame, f, int(c["x"] + (6 - f.width) // 2 - cam), int(cy))
-            elif t - c["got"] < 0.25:
-                k = (t - c["got"]) / 0.25
+            if t < c["t"]:
+                if -10 < c["x"] - cam < W + 10:
+                    f = COIN_FRAMES[int(t * 8 + c["x"] * 0.1) % 4]
+                    _paste_clip(frame, f, int(c["x"] + (6 - f.width) // 2 - cam), int(cy))
+            elif t - c["t"] < 0.25:
+                k = (t - c["t"]) / 0.25
                 for a in range(4):
                     ang = a * math.pi / 2 + 0.7
                     sx = c["x"] + 3 + math.cos(ang) * 8 * k - cam
@@ -1077,51 +1112,42 @@ def render():
         # ---------------- enemies
         for e in enemies:
             kind = e["kind"]
-            if e["t_hit"] is None:
-                t_est = t_of_x(e["x_trig"])
+            if e["x"] - cam > W + 40 or e["x"] - cam < -80:
+                continue
+            if t < e["t"]:
                 if kind == "pigeon":
                     img = PIGEON[int(t * 5 + e["x"]) % 2].transpose(Image.FLIP_LEFT_RIGHT)
                     _paste_clip(frame, img, int(e["x"] - cam), GROUND - 8)
                 elif kind == "rat":
-                    ex = e["x"] + (t_est - t) * 12
-                    _paste_clip(frame, RAT[int(t * 8) % 2], int(ex - cam), GROUND - 6)
+                    _paste_clip(frame, RAT[int(t * 8) % 2], int(e["x"] + (e["t"] - t) * 12 - cam), GROUND - 6)
                 elif kind == "cart":
-                    ex = e["x"] + (t_est - t) * 18
-                    _paste_clip(frame, CART, int(ex - cam), GROUND - 12)
+                    _paste_clip(frame, CART, int(e["x"] + (e["t"] - t) * 18 - cam), GROUND - 12)
                 continue
-            dt = t - e["t_hit"]
+            dt = t - e["t"]
             if e["mode"] == "stomp":
                 if kind == "pigeon" and dt < 2.0:
                     _paste_clip(frame, PIGEON_FLY[int(t * 12) % 2],
                                 int(e["x"] + dt * 50 - cam), int(GROUND - 10 - dt * 70))
                 elif kind == "rat" and dt < 0.4:
-                    flat = RAT[0].resize((12, 3), Image.NEAREST)
-                    _paste_clip(frame, flat, int(e["x"] - cam), GROUND - 3)
-            else:
-                if dt < 1.5:
-                    img = {"pigeon": PIGEON[0], "rat": RAT[0], "cart": CART}[kind].transpose(Image.FLIP_TOP_BOTTOM)
-                    ex = e["x"] + 50 * dt - cam
-                    ey = GROUND - img.height - (60 * dt - 200 * dt * dt)
-                    _paste_clip(frame, img, int(ex), int(ey))
-                    if dt < 0.12:
-                        for a in range(6):
-                            ang = a * math.pi / 3
-                            dr.point((e["x"] + 6 + math.cos(ang) * 8 - cam, GROUND - 6 + math.sin(ang) * 8),
-                                     fill=(255, 255, 200))
-        # carts you jump over
-        for ap in CART_APEX:
-            ta = t_of_x(ap)
-            cx_ = ap + 9 - 6 + (ta - t) * 18
-            _paste_clip(frame, CART, int(cx_ - cam), GROUND - 12)
+                    _paste_clip(frame, RAT[0].resize((12, 3), Image.NEAREST), int(e["x"] - cam), GROUND - 3)
+            elif dt < 1.5:
+                img = {"pigeon": PIGEON[0], "rat": RAT[0], "cart": CART}[kind].transpose(Image.FLIP_TOP_BOTTOM)
+                ex = e["x"] + 50 * dt - cam
+                ey = GROUND - img.height - (60 * dt - 200 * dt * dt)
+                _paste_clip(frame, img, int(ex), int(ey))
+                if dt < 0.12:
+                    for a in range(6):
+                        ang = a * math.pi / 3
+                        dr.point((e["x"] + 6 + math.cos(ang) * 8 - cam, GROUND - 6 + math.sin(ang) * 8), fill=(255, 255, 200))
+        for (ta, xc) in carts:
+            _paste_clip(frame, CART, int(xc - 6 + (ta - t) * 18 - cam), GROUND - 12)
 
-        # ---------------- vehicles (bus is drawn before the kid; he rides it)
+        # ---------------- vehicles
         bxp = bus_x(t)
         if -70 < bxp - cam < W + 10:
             _paste_clip(frame, BUS, int(bxp - cam), GROUND - ROOF)
-            if ("honk",) not in triggered and bxp - cam > -60:
-                triggered.add(("honk",)); sfx.append((t, "honk"))
         car_x = -60 + (t - 6) * 75
-        for off in (0, 1300):
+        for off in (0, 1300, 2600):
             cxs = car_x + off - cam
             if -50 < cxs < W + 10:
                 _paste_clip(frame, CAR, int(cxs), 238)
@@ -1144,15 +1170,12 @@ def render():
 
         # ---------------- player
         if pose != "gone":
-            is_big = kid_big(px) and not (grow_t is not None and t - grow_t < 0.6 and int((t - grow_t) / 0.08) % 2 == 0)
-            if t >= T_FINAL:
-                is_big = True
+            is_big = kid_big_t(t) and not (t - T_BIG < 0.6 and int((t - T_BIG) / 0.08) % 2 == 0)
             S = BIG if is_big else SMALL
             if hyper:
                 S = HYPER[int(t * 10) % 4]
             if pose in ("stand", "run"):
-                frames_ = S["run"]
-                img = frames_[1] if pose == "stand" else frames_[int(t * (18 if hyper else 12)) % 3]
+                img = S["run"][1] if pose == "stand" else S["run"][int(t * (18 if hyper else 12)) % 3]
             elif pose == "jump":
                 img = S["jump"]
             else:
@@ -1170,13 +1193,11 @@ def render():
                     sx = px + rng.uniform(-4, img.width + 4) - cam
                     sy = feet - rng.uniform(0, img.height + 6)
                     dr.point((sx, sy), fill=rng.choice([(255, 255, 255), (255, 240, 120), (150, 230, 255)]))
-            if pose == "run" and int(t * 12) % 3 == 0:
-                dr.point((px - cam - 1, feet - 1), fill=(230, 230, 235))
 
         # ---------------- score pops
-        for (st, sx, sy, txt, col) in score_pops:
-            if 0 <= t - st < 0.8:
-                draw_text(frame, int(sx - cam), int(sy - (t - st) * 25), txt, col, shadow=(0, 0, 0))
+        for (st_, sx, sy, txt, col) in pops:
+            if 0 <= t - st_ < 0.8:
+                draw_text(frame, int(sx - cam), int(sy - (t - st_) * 25), txt, col, shadow=(0, 0, 0))
 
         # ---------------- HUD
         white, sh = (255, 255, 255), (30, 30, 60)
@@ -1187,22 +1208,20 @@ def render():
         draw_text(frame, 66, 10, "N.BERGEN", white, shadow=sh)
         draw_text(frame, 76, 17, "1-1", white, shadow=sh)
         draw_text(frame, 116, 10, "TIME", white, shadow=sh)
-        if t >= T_RUN:
-            draw_text(frame, 118, 17, f"{max(0, time_left):03d}", white, shadow=sh)
+        draw_text(frame, 118, 17, f"{max(0, time_left):03d}", white, shadow=sh)
 
         # ---------------- title overlay
-        if t < T_RUN + 2.0:
-            a = 1.0 if t < T_RUN + 1.2 else max(0.0, 1 - (t - T_RUN - 1.2) / 0.8)
-            if a > 0:
-                ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-                od = ImageDraw.Draw(ov)
-                od.rectangle([8, 44, W - 9, 92], fill=(20, 20, 50, int(200 * a)))
-                od.rectangle([8, 44, W - 9, 92], outline=(255, 210, 60, int(255 * a)))
-                frame.alpha_composite(ov)
-                if a > 0.5:
-                    draw_text(frame, (W - text_w("BERGENLINE", 2)) // 2, 52, "BERGENLINE", (255, 210, 60), 2, (120, 40, 20))
-                    draw_text(frame, (W - text_w("AVENUE", 2)) // 2, 66, "AVENUE", (255, 210, 60), 2, (120, 40, 20))
-                    draw_text(frame, (W - text_w("NORTH BERGEN, NJ")) // 2, 82, "NORTH BERGEN, NJ", white)
+        if t < 2.4:
+            a = 1.0 if t < 1.6 else max(0.0, 1 - (t - 1.6) / 0.8)
+            ov = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+            od = ImageDraw.Draw(ov)
+            od.rectangle([8, 44, W - 9, 92], fill=(20, 20, 50, int(200 * a)))
+            od.rectangle([8, 44, W - 9, 92], outline=(255, 210, 60, int(255 * a)))
+            frame.alpha_composite(ov)
+            if a > 0.5:
+                draw_text(frame, (W - text_w("BERGENLINE", 2)) // 2, 52, "BERGENLINE", (255, 210, 60), 2, (120, 40, 20))
+                draw_text(frame, (W - text_w("AVENUE", 2)) // 2, 66, "AVENUE", (255, 210, 60), 2, (120, 40, 20))
+                draw_text(frame, (W - text_w("NORTH BERGEN, NJ")) // 2, 82, "NORTH BERGEN, NJ", white)
 
         # ---------------- clear + fireworks
         if t >= T_CLEAR:
@@ -1218,8 +1237,6 @@ def render():
                         ang = a * math.pi / 6
                         dr.rectangle([fx + math.cos(ang) * rad, fy2 + math.sin(ang) * rad,
                                       fx + math.cos(ang) * rad + 1, fy2 + math.sin(ang) * rad + 1], fill=colr)
-                    if ("fw", k) not in triggered:
-                        triggered.add(("fw", k)); sfx.append((t, "boom"))
 
         # ---------------- end card
         if t >= T_END:
@@ -1243,7 +1260,7 @@ def render():
     if ff:
         ff.stdin.close()
         ff.wait()
-    print(f"coins {ncoins}  score {score}  duration {DURATION:.1f}s", file=sys.stderr)
+    print(f"coins {len(coins)}  duration {DURATION:.1f}s  level {LEVEL_W}px", file=sys.stderr)
 
 
 # ---------------------------------------------------------------- audio
@@ -1441,10 +1458,10 @@ if __name__ == "__main__":
     render()
     if os.environ.get("PREVIEW"):
         sys.exit()
-    make_audio()
+    # soundtrack: the reference video's song (with its sound effects)
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", str(OUT_DIR / "_video.mp4"),
-                    "-i", str(OUT_DIR / "_audio.wav"), "-c:v", "copy", "-c:a", "aac",
-                    "-b:a", "160k", "-shortest", str(OUT_DIR / "bergenline_run.mp4")], check=True)
+                    "-i", str(OUT_DIR / "reference_audio.m4a"), "-map", "0:v", "-map", "1:a",
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-shortest",
+                    str(OUT_DIR / "bergenline_run.mp4")], check=True)
     (OUT_DIR / "_video.mp4").unlink()
-    (OUT_DIR / "_audio.wav").unlink()
     print("done:", OUT_DIR / "bergenline_run.mp4", f"{DURATION:.1f}s")
