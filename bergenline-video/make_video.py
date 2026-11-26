@@ -261,6 +261,31 @@ LOGO_CARD = make_logo(44)
 BUS = make_bus()
 CAR = make_car((240, 200, 40))
 
+
+def make_truck():
+    """box truck, facing left"""
+    im = Image.new("RGBA", (84, 32), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rectangle([18, 0, 83, 25], fill=(250, 250, 245))
+    d.rectangle([18, 0, 83, 25], outline=(150, 150, 150))
+    d.rectangle([19, 20, 82, 24], fill=(30, 130, 60))
+    draw_text(im, 18 + (66 - text_w("GARGIULO")) // 2, 4, "GARGIULO", (30, 120, 50))
+    draw_text(im, 18 + (66 - text_w("PRODUCE")) // 2, 11, "PRODUCE", (200, 40, 40))
+    for k, col in enumerate([(220, 40, 40), (60, 170, 60), (250, 150, 30), (220, 40, 40)]):
+        d.ellipse([22 + k * 4, 17, 25 + k * 4, 20], fill=col)
+        d.ellipse([71 + k * 2, 17 - (k % 2), 74 + k * 2, 20 - (k % 2)], fill=col)
+    d.polygon([(0, 26), (0, 13), (5, 6), (17, 6), (17, 26)], fill=(30, 130, 60))
+    d.polygon([(2, 13), (6, 8), (12, 8), (12, 13)], fill=(150, 200, 230))
+    d.rectangle([0, 22, 2, 24], fill=(255, 230, 120))
+    d.rectangle([0, 26, 83, 27], fill=(60, 60, 60))
+    for wx in (4, 56, 68):
+        d.ellipse([wx, 24, wx + 8, 31], fill=(25, 25, 30))
+        d.ellipse([wx + 3, 27, wx + 5, 29], fill=(170, 170, 180))
+    return im
+
+
+TRUCK = make_truck()
+
 # ---------------------------------------------------------------- timeline
 # Everything is timed to the soundtrack of the reference video (reference_audio).
 # Score/coin events below were read frame by frame off that video's HUD, so each
@@ -341,7 +366,7 @@ GENERIC = [
     ("LAVANDERIA", (60, 170, 230), (255, 255, 255), (60, 170, 230), (255, 255, 255), (220, 200, 170)),
     ("PERFUMES", (120, 40, 140), (255, 200, 240), (200, 90, 200), (255, 255, 255), (235, 230, 240)),
     ("TACOS", (255, 120, 20), (255, 255, 255), (255, 120, 20), (255, 230, 60), (250, 200, 210)),
-    ("BODEGA", (240, 240, 40), (20, 20, 20), (30, 140, 60), (240, 240, 40), (215, 190, 160)),
+    ("CARNICERIA", (255, 255, 255), (170, 30, 30), (170, 30, 30), (255, 255, 255), (215, 190, 160)),
 ]
 
 # Real listings, in address order.  "/" splits a sign onto two lines.
@@ -350,10 +375,10 @@ BLOCK_77_79 = [
     ("ADRY'S/BEAUTY SPA", (250, 200, 225), (170, 40, 110), (230, 120, 170), (255, 255, 255), (235, 230, 240)),  # 7710
     ("TOWN/BEVERAGE", (30, 50, 110), (255, 255, 255), (30, 50, 110), (200, 30, 40), (215, 190, 160)),     # 7804
     ("LA KAUSA", (200, 40, 30), (255, 220, 60), (200, 40, 30), (255, 220, 60), (230, 220, 200)),        # 7815
-    ("FLOWERS OF/THE FIELD", (255, 255, 255), (40, 140, 60), (240, 130, 170), (255, 255, 255), (180, 80, 60)),  # 7821
-    ("VICO/GELATO", (255, 240, 245), (60, 130, 90), (120, 200, 170), (255, 255, 255), (232, 200, 150)),  # 7827
     ("LA SORRENTINA", (20, 110, 60), (255, 255, 255), (20, 140, 70), (220, 40, 40), (240, 225, 190)),   # 7831
+    ("VICO/GELATO", (255, 240, 245), (60, 130, 90), (120, 200, 170), (255, 255, 255), (232, 200, 150)),  # 7827
 ]
+LAS_TAPAS = ("LAS TAPAS", (200, 30, 30), (255, 215, 40), (200, 30, 30), (255, 215, 40), (232, 200, 150))
 BLOCK_81_83 = [
     ("HARRY'S", (20, 20, 30), (255, 200, 60), (40, 40, 50), (255, 200, 60), (190, 70, 60)),           # 8101
     ("BERGENLINE/SUPERMARKET", (220, 30, 40), (255, 255, 255), (220, 30, 40), (255, 255, 255), (230, 230, 220)),  # 8107
@@ -491,6 +516,8 @@ def build_level():
             n = max(1, L // 50)
             stores = [GENERIC[(gi + k) % len(GENERIC)] for k in range(n)]
             gi += n
+            if si == 3:                       # first storefront past 79th St
+                stores[0] = LAS_TAPAS
         widths = [store_min_w(st) for st in stores]
         extra = L - sum(widths)
         assert extra >= 0, f"segment {si} too short by {-extra}px"
@@ -1146,6 +1173,12 @@ def render():
         bxp = bus_x(t)
         if -70 < bxp - cam < W + 10:
             _paste_clip(frame, BUS, int(bxp - cam), GROUND - ROOF)
+        # Gargiulo Produce truck driving the other way
+        for t0 in (29.0, 64.0):
+            if t0 - 2 < t < t0 + 3:
+                tx_ = x_of_t(t0) + 100 - (t - t0) * 70
+                if -90 < tx_ - cam < W + 10:
+                    _paste_clip(frame, TRUCK, int(tx_ - cam), 222)
         car_x = -60 + (t - 6) * 75
         for off in (0, 1300, 2600):
             cxs = car_x + off - cam
