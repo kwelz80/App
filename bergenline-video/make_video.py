@@ -346,8 +346,26 @@ LEVEL_W = POLE_X + 120
 
 # ---------------------------------------------------------------- level art
 # Cross streets from 72nd St (start) to 84th St (finish)
-CROSS = [(int(x_of_t(16.2)), "74 ST"), (int(x_of_t(26.6)), "77 ST"), (int(x_of_t(43.5)), "79 ST"),
-         (int(x_of_t(55.0)), "81 ST"), (int(x_of_t(71.5)), "83 ST"), (int(X_FINAL + 40), "84 ST")]
+def _place_crosses():
+    names = ["74 ST", "77 ST", "79 ST", "81 ST", "83 ST"]
+    weights = [3, 11, 6, 4, 6, 2]           # stores per block + 2
+    span = (X_FINAL + 40) - (-10) - 5 * 36
+    avoid = [(10.5, 13.0), (14.8, 15.5), (23.2, 26.4), (53.8, 54.6), (72.9, 74.0)]
+    out, x = [], -10
+    for i, nm in enumerate(names):
+        x += span * weights[i] / sum(weights)
+        cx = x
+        for a, b in avoid:
+            if x_of_t(a) - 36 < cx < x_of_t(b):
+                cx = x_of_t(b) + 2
+        cx = min(cx, x_of_t(75.3) - 40)    # keep 83rd St before the crate stairs
+        out.append((int(cx), nm))
+        x = cx + 36
+    out.append((int(X_FINAL + 40), "84 ST"))
+    return out
+
+
+CROSS = _place_crosses()
 CROSS_W = 36
 
 # Generic placeholder storefronts (blocks with no verified listings)
@@ -370,22 +388,43 @@ GENERIC = [
 ]
 
 # Real listings, in address order.  "/" splits a sign onto two lines.
-BLOCK_77_79 = [
-    ("CORTADITOS", (250, 240, 220), (120, 60, 30), (120, 60, 30), (250, 240, 220), (200, 110, 80)),      # 7700
-    ("ADRY'S/BEAUTY SPA", (250, 200, 225), (170, 40, 110), (230, 120, 170), (255, 255, 255), (235, 230, 240)),  # 7710
-    ("TOWN/BEVERAGE", (30, 50, 110), (255, 255, 255), (30, 50, 110), (200, 30, 40), (215, 190, 160)),     # 7804
-    ("LA KAUSA", (200, 40, 30), (255, 220, 60), (200, 40, 30), (255, 220, 60), (230, 220, 200)),        # 7815
-    ("LA SORRENTINA", (20, 110, 60), (255, 255, 255), (20, 140, 70), (220, 40, 40), (240, 225, 190)),   # 7831
-    ("VICO/GELATO", (255, 240, 245), (60, 130, 90), (120, 200, 170), (255, 255, 255), (232, 200, 150)),  # 7827
+# Real storefronts by block, in address order (list supplied by the user).
+# (sign text, sign bg, sign text color, awning 1, awning 2, facade). "/" = two-line sign.
+REAL_BLOCKS = [
+    [  # 72nd - 74th
+        ("BANANA KING", (255, 220, 30), (30, 110, 50), (255, 220, 30), (30, 110, 50), (230, 220, 200)),           # 7316
+    ],
+    [  # 74th - 77th
+        ("EL CARRETERO", (250, 210, 40), (30, 60, 150), (200, 30, 40), (250, 210, 40), (200, 110, 80)),          # 7412
+        ("SELECTOS/FOODMARKET", (200, 30, 40), (255, 255, 255), (200, 30, 40), (255, 255, 255), (225, 215, 190)),  # 7425
+        ("AL-KARAM/FASHION", (30, 30, 40), (240, 200, 90), (90, 40, 110), (240, 200, 90), (235, 230, 240)),        # 7508
+        ("GANDOLFO/PIZZERIA", (30, 130, 60), (255, 255, 255), (200, 30, 30), (255, 255, 255), (180, 80, 60)),     # 7523
+        ("AMEEN/PHARMACY", (255, 255, 255), (20, 120, 70), (20, 120, 70), (255, 255, 255), (170, 190, 210)),       # 7527
+        ("BOUTIQUE/CAROL", (250, 200, 225), (160, 30, 100), (230, 100, 160), (255, 255, 255), (232, 200, 150)),    # 7551
+        ("LAS CHICAS/BAKERY", (255, 230, 190), (180, 60, 40), (240, 140, 80), (255, 240, 220), (250, 200, 210)),  # 7553
+        ("N B FASHION", (40, 40, 60), (255, 255, 255), (60, 60, 90), (220, 220, 230), (200, 120, 90)),            # 7609
+        ("LATINO AMERICAN/SUPER MARKET", (30, 90, 170), (255, 220, 40), (30, 90, 170), (255, 220, 40), (230, 230, 220)),  # 7620
+    ],
+    [  # 77th - 79th
+        ("CORTADITOS", (250, 240, 220), (120, 60, 30), (120, 60, 30), (250, 240, 220), (200, 110, 80)),          # 7700
+        ("LA KAUSA", (200, 40, 30), (255, 220, 60), (200, 40, 30), (255, 220, 60), (230, 220, 200)),             # 7815
+        ("NOVECKS/PHARMACY", (255, 255, 255), (30, 80, 160), (30, 80, 160), (255, 255, 255), (215, 190, 160)),   # 7823
+        ("LA SORRENTINA", (20, 110, 60), (255, 255, 255), (20, 140, 70), (220, 40, 40), (240, 225, 190)),        # 7831
+    ],
+    [  # 79th - 81st
+        ("TAPAS DE/ESPANA", (200, 30, 30), (255, 215, 40), (200, 30, 30), (255, 215, 40), (232, 200, 150)),      # 7909
+        ("BIRRIA HOUSE/TAQUERIA", (120, 30, 20), (255, 200, 60), (230, 110, 30), (255, 230, 120), (250, 200, 210)),  # 7911
+    ],
+    [  # 81st - 83rd
+        ("HARRY'S", (20, 20, 30), (255, 200, 60), (40, 40, 50), (255, 200, 60), (190, 70, 60)),                  # 8101
+        ("BERGENLINE/SUPERMARKET", (220, 30, 40), (255, 255, 255), (220, 30, 40), (255, 255, 255), (230, 230, 220)),  # 8107
+        ("JIMMY'S/BAKERY", (255, 225, 180), (150, 60, 30), (210, 120, 60), (255, 240, 220), (200, 120, 90)),     # 8125
+        ("EL FENIX/BAKERY III", (30, 60, 140), (255, 200, 60), (230, 120, 30), (255, 220, 120), (225, 215, 190)),  # 8133
+    ],
+    [],  # 83rd - 84th
 ]
-LAS_TAPAS = ("LAS TAPAS", (200, 30, 30), (255, 215, 40), (200, 30, 30), (255, 215, 40), (232, 200, 150))
-BLOCK_81_83 = [
-    ("HARRY'S", (20, 20, 30), (255, 200, 60), (40, 40, 50), (255, 200, 60), (190, 70, 60)),           # 8101
-    ("BERGENLINE/SUPERMARKET", (220, 30, 40), (255, 255, 255), (220, 30, 40), (255, 255, 255), (230, 230, 220)),  # 8107
-    ("JIMMY'S/BAKERY", (255, 225, 180), (150, 60, 30), (210, 120, 60), (255, 240, 220), (200, 120, 90)),  # 8125
-    ("ASIAN FUSION/SUSHI", (20, 20, 20), (240, 60, 60), (200, 30, 30), (20, 20, 20), (225, 215, 190)),  # 8201
-    ("WADI/SCOOPS", (120, 210, 230), (255, 255, 255), (250, 150, 190), (255, 255, 255), (210, 200, 230)),  # 8205
-]
+MAX_REAL_W = 96
+
 
 LIB_X, LIB_W = POLE_X + 16, 86          # Sai Rao Public Library, 8411 Bergenline
 
@@ -499,25 +538,19 @@ def build_level():
     gi = 0
     seg_starts = [-10] + [cx + CROSS_W for cx, _ in CROSS[:-1]]
     seg_ends = [cx for cx, _ in CROSS]
-    real = {2: BLOCK_77_79, 4: BLOCK_81_83}
     for si, (a, b) in enumerate(zip(seg_starts, seg_ends)):
         L = b - a
-        if si in real:
-            # real listings in address order; unverified storefronts fill the gaps
-            stores = list(real[si])
-            k = 1
-            while sum(store_min_w(s) for s in stores) + 50 <= L:
-                stores.insert(min(k, len(stores)), GENERIC[gi % len(GENERIC)])
-                gi += 1
-                k += 2
-                if k > len(stores):
-                    k = 1
-        else:
-            n = max(1, L // 50)
-            stores = [GENERIC[(gi + k) % len(GENERIC)] for k in range(n)]
-            gi += n
-            if si == 3:                       # first storefront past 79th St
-                stores[0] = LAS_TAPAS
+        real = REAL_BLOCKS[si]
+        free = L - sum(min(MAX_REAL_W, store_min_w(r) + 24) for r in real)
+        ngen = max(0, int(free // 56)) if real else max(1, L // 52)
+        stores = []
+        slots = len(real) + 1
+        for k in range(slots):          # spread placeholders evenly between real stores
+            cnt = ngen * (k + 1) // slots - ngen * k // slots
+            for _ in range(cnt):
+                stores.append(GENERIC[gi % len(GENERIC)]); gi += 1
+            if k < len(real):
+                stores.append(real[k])
         widths = [store_min_w(st) for st in stores]
         extra = L - sum(widths)
         assert extra >= 0, f"segment {si} too short by {-extra}px"
@@ -871,8 +904,8 @@ coin_t(69.3)
 knock(69.7, "rat")
 # ---- 83rd -> 84th: obstacles on the beat, crate stairs, flagpole
 over(71.2, "cart", 34)
-over(72.6, "hydrant")
-over(74.0, "cellar", 32, 0.7)
+over(72.2, "hydrant")
+over(73.3, "cellar", 32, 0.7)
 st = [75.6, 76.13, 76.66, 77.19, 77.72]
 for i in range(4):
     mv_t(st[i], st[i + 1], i * 10, (i + 1) * 10, (i + 1) * 10 + 8)
