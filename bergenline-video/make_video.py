@@ -1941,6 +1941,11 @@ if __name__ == "__main__":
         k = int(t0 * SR)
         n_ = min(len(w_), len(ref) - k)
         ref[k:k + n_] += w_[:n_, None]
+    # drop the reference video's closing jingle (87.4s on)
+    cut = int(87.3 * SR)
+    fade = int(0.05 * SR)
+    ref[cut - fade:cut] *= np.linspace(1, 0, fade)[:, None]
+    ref[cut:] = 0
     ref = np.clip(ref, -1, 1)
     with wave.open(str(OUT_DIR / "_mix.wav"), "wb") as wf:
         wf.setnchannels(2); wf.setsampwidth(2); wf.setframerate(SR)
