@@ -248,45 +248,70 @@ BUS = make_bus()
 CAR = make_car((240, 200, 40))
 
 # ---------------------------------------------------------------- level art
-CROSS = [(520, "77 ST"), (1040, "82 ST"), (1440, "88 ST")]
+# Cross streets from 72nd St (start) to 84th St (finish)
+CROSS = [(250, "74 ST"), (480, "77 ST"), (860, "79 ST"), (1060, "81 ST"),
+         (1360, "83 ST"), (1640, "84 ST")]
 CROSS_W = 36
-STORES = [
+
+# Generic placeholder storefronts (blocks with no verified listings)
+GENERIC = [
     ("PANADERIA", (250, 230, 200), (180, 40, 40), (220, 60, 60), (255, 255, 255), (232, 200, 150)),
-    ("PUPUSAS", (40, 80, 180), (255, 255, 255), (40, 80, 180), (255, 255, 255), (230, 230, 220)),
-    ("CAFE", (90, 50, 30), (255, 220, 150), (90, 50, 30), (240, 200, 140), (200, 110, 80)),
-    ("99 CENT", (255, 220, 0), (200, 20, 20), (230, 40, 40), (255, 220, 0), (180, 80, 60)),
-    ("PIZZA", (30, 140, 60), (255, 255, 255), (200, 30, 30), (255, 255, 255), (240, 225, 190)),
     ("FARMACIA", (255, 255, 255), (20, 140, 70), (20, 140, 70), (255, 255, 255), (170, 190, 210)),
+    ("99 CENT", (255, 220, 0), (200, 20, 20), (230, 40, 40), (255, 220, 0), (180, 80, 60)),
+    ("ENVIOS", (20, 90, 170), (255, 220, 0), (20, 90, 170), (255, 220, 0), (225, 215, 190)),
     ("CELL FIX", (20, 20, 40), (80, 220, 255), (60, 60, 80), (80, 220, 255), (210, 200, 230)),
     ("BARBER", (255, 255, 255), (30, 60, 160), (220, 40, 40), (255, 255, 255), (190, 70, 60)),
-    ("TACOS", (255, 120, 20), (255, 255, 255), (255, 120, 20), (255, 230, 60), (250, 200, 210)),
-    ("ENVIOS", (20, 90, 170), (255, 220, 0), (20, 90, 170), (255, 220, 0), (225, 215, 190)),
+    ("PUPUSAS", (40, 80, 180), (255, 255, 255), (40, 80, 180), (255, 255, 255), (230, 230, 220)),
     ("JOYERIA", (40, 30, 60), (255, 210, 80), (100, 60, 140), (255, 210, 80), (200, 120, 90)),
-    ("ZAPATOS", (230, 60, 120), (255, 255, 255), (230, 60, 120), (255, 255, 255), (230, 230, 220)),
-    ("BAKERY", (255, 200, 220), (160, 50, 90), (240, 120, 160), (255, 255, 255), (170, 90, 70)),
-    ("BODEGA", (240, 240, 40), (20, 20, 20), (30, 140, 60), (240, 240, 40), (215, 190, 160)),
-    ("DELI", (180, 30, 30), (255, 255, 255), (180, 30, 30), (255, 255, 255), (230, 220, 200)),
     ("OPTICA", (255, 255, 255), (40, 40, 160), (40, 40, 160), (200, 220, 255), (180, 80, 70)),
-    ("PERFUMES", (120, 40, 140), (255, 200, 240), (200, 90, 200), (255, 255, 255), (235, 230, 240)),
+    ("ZAPATOS", (230, 60, 120), (255, 255, 255), (230, 60, 120), (255, 255, 255), (230, 230, 220)),
+    ("DELI", (180, 30, 30), (255, 255, 255), (180, 30, 30), (255, 255, 255), (230, 220, 200)),
     ("LAVANDERIA", (60, 170, 230), (255, 255, 255), (60, 170, 230), (255, 255, 255), (220, 200, 170)),
+    ("PERFUMES", (120, 40, 140), (255, 200, 240), (200, 90, 200), (255, 255, 255), (235, 230, 240)),
+    ("TACOS", (255, 120, 20), (255, 255, 255), (255, 120, 20), (255, 230, 60), (250, 200, 210)),
+    ("BODEGA", (240, 240, 40), (20, 20, 20), (30, 140, 60), (240, 240, 40), (215, 190, 160)),
 ]
+
+# Real listings, in address order.  "/" splits a sign onto two lines.
+BLOCK_77_79 = [
+    ("CORTADITOS", (250, 240, 220), (120, 60, 30), (120, 60, 30), (250, 240, 220), (200, 110, 80)),      # 7700
+    ("ADRY'S/BEAUTY SPA", (250, 200, 225), (170, 40, 110), (230, 120, 170), (255, 255, 255), (235, 230, 240)),  # 7710
+    ("TOWN/BEVERAGE", (30, 50, 110), (255, 255, 255), (30, 50, 110), (200, 30, 40), (215, 190, 160)),     # 7804
+    ("LA KAUSA", (200, 40, 30), (255, 220, 60), (200, 40, 30), (255, 220, 60), (230, 220, 200)),        # 7815
+    ("FLOWERS OF/THE FIELD", (255, 255, 255), (40, 140, 60), (240, 130, 170), (255, 255, 255), (180, 80, 60)),  # 7821
+    ("VICO/GELATO", (255, 240, 245), (60, 130, 90), (120, 200, 170), (255, 255, 255), (232, 200, 150)),  # 7827
+    ("LA SORRENTINA", (20, 110, 60), (255, 255, 255), (20, 140, 70), (220, 40, 40), (240, 225, 190)),   # 7831
+]
+BLOCK_81_83 = [
+    ("HARRY'S", (20, 20, 30), (255, 200, 60), (40, 40, 50), (255, 200, 60), (190, 70, 60)),           # 8101
+    ("BERGENLINE/SUPERMARKET", (220, 30, 40), (255, 255, 255), (220, 30, 40), (255, 255, 255), (230, 230, 220)),  # 8107
+    ("JIMMY'S/BAKERY", (255, 225, 180), (150, 60, 30), (210, 120, 60), (255, 240, 220), (200, 120, 90)),  # 8125
+    ("ASIAN FUSION/SUSHI", (20, 20, 20), (240, 60, 60), (200, 30, 30), (20, 20, 20), (225, 215, 190)),  # 8201
+    ("WADI/SCOOPS", (120, 210, 230), (255, 255, 255), (250, 150, 190), (255, 255, 255), (210, 200, 230)),  # 8205
+]
+
+LIB_X, LIB_W = 1712, 86          # Sai Rao Public Library, 8411 Bergenline
+
+
+def store_min_w(store):
+    return max(44, max(text_w(l) for l in store[0].split("/")) + 8)
 
 
 def draw_building(d, x, w, store, rng):
     name, sign_bg, sign_fg, aw1, aw2, facade = store
+    nl = len(name.split("/"))
+    sf_h = 30 + 6 * (nl - 1)              # storefront height
     stories = rng.choice([2, 2, 3])
-    top = GROUND - 30 - stories * 20 - 4
+    top = GROUND - sf_h - stories * 20 - 4
     d.rectangle([x, top, x + w - 1, GROUND - 1], fill=facade)
     shade = tuple(max(0, c - 40) for c in facade)
-    # cornice
     d.rectangle([x, top, x + w - 1, top + 3], fill=shade)
     d.rectangle([x, top + 4, x + w - 1, top + 4], fill=tuple(min(255, c + 25) for c in facade))
-    # brick texture for reddish facades
+    d.line([x, top, x, GROUND - 1], fill=shade)
     if facade[0] > facade[2] + 40 and facade[0] < 210:
-        for by in range(top + 6, GROUND - 30, 4):
+        for by in range(top + 6, GROUND - sf_h, 4):
             for bx in range(x + ((by // 4) % 2) * 3, x + w - 1, 6):
                 d.point((bx, by), fill=shade)
-    # windows
     nwin = max(2, (w - 8) // 14)
     gap = (w - nwin * 8) / (nwin + 1)
     for s in range(stories):
@@ -299,39 +324,29 @@ def draw_building(d, x, w, store, rng):
             d.line([wx + 4, wy, wx + 4, wy + 10], fill=(245, 240, 230))
             d.rectangle([wx - 2, wy + 11, wx + 9, wy + 12], fill=shade)
             r = rng.random()
-            if r < 0.2:   # AC unit
+            if r < 0.2:
                 d.rectangle([wx + 1, wy + 6, wx + 7, wy + 10], fill=(200, 200, 205))
                 d.line([wx + 2, wy + 8, wx + 6, wy + 8], fill=(120, 120, 130))
-            elif r < 0.35:  # plant
+            elif r < 0.35:
                 d.rectangle([wx, wy + 9, wx + 7, wy + 10], fill=(150, 80, 40))
                 d.rectangle([wx + 1, wy + 7, wx + 6, wy + 8], fill=(60, 160, 70))
-            elif r < 0.45:  # flag in window
-                d.rectangle([wx + 1, wy + 2, wx + 6, wy + 6], fill=rng.choice(
-                    [(250, 210, 0), (230, 40, 40), (30, 90, 200), (255, 255, 255)]))
-    # storefront
-    sy = GROUND - 30
+    sy = GROUND - sf_h
     d.rectangle([x, sy, x + w - 1, GROUND - 1], fill=(60, 60, 70))
-    # sign board
-    d.rectangle([x + 1, sy, x + w - 2, sy + 8], fill=sign_bg)
+    bh = 2 + 6 * nl
+    d.rectangle([x + 1, sy, x + w - 2, sy + bh], fill=sign_bg)
     d.rectangle([x + 1, sy, x + w - 2, sy], fill=(0, 0, 0))
-    tw = text_w(name)
-    draw_text_on = Image.new("RGBA", (1, 1))
-    del draw_text_on
-    # awning
-    ay = sy + 9
+    ay = sy + bh + 1
     for i in range(x + 1, x + w - 1):
         c = aw1 if ((i - x) // 4) % 2 == 0 else aw2
         d.line([i, ay, i, ay + 4], fill=c)
         if (i - x) % 4 in (1, 2):
             d.point((i, ay + 5), fill=c)
-    # window + door
     gy = ay + 7
     door_x = x + w - 12
     d.rectangle([x + 3, gy, door_x - 3, GROUND - 3], fill=(150, 210, 240))
     d.line([x + 5, gy + 9, x + 11, gy + 2], fill=(220, 245, 255))
     d.line([x + 6, gy + 10, x + 12, gy + 3], fill=(220, 245, 255))
     d.rectangle([x + 3, GROUND - 6, door_x - 3, GROUND - 3], fill=(90, 90, 100))
-    # goods in window
     for gx in range(x + 16, door_x - 5, 6):
         d.rectangle([gx, GROUND - 9, gx + 3, GROUND - 6], fill=rng.choice(
             [aw1, aw2, sign_fg, (255, 200, 120)]))
@@ -341,31 +356,73 @@ def draw_building(d, x, w, store, rng):
     return (name, x, w, sy, sign_fg)
 
 
+def draw_library(im, d):
+    x, w = LIB_X, LIB_W
+    stone, dark, trim = (226, 212, 180), (180, 165, 135), (245, 238, 220)
+    top = GROUND - 86
+    d.rectangle([x, top + 10, x + w - 1, GROUND - 1], fill=stone)
+    d.polygon([(x - 2, top + 12), (x + w // 2, top - 6), (x + w + 1, top + 12)], fill=trim)   # pediment
+    d.polygon([(x + 8, top + 10), (x + w // 2, top - 1), (x + w - 9, top + 10)], fill=stone)
+    d.rectangle([x - 2, top + 10, x + w + 1, top + 13], fill=trim)
+    # name plate
+    d.rectangle([x + 4, top + 16, x + w - 5, top + 30], fill=(30, 60, 110))
+    d.rectangle([x + 5, top + 17, x + w - 6, top + 29], outline=(240, 210, 120))
+    draw_text(im, x + (w - text_w("SAI RAO")) // 2, top + 19, "SAI RAO", (255, 230, 150))
+    draw_text(im, x + (w - text_w("PUBLIC LIBRARY")) // 2, top + 24, "PUBLIC LIBRARY", (255, 255, 255))
+    # columns
+    for cx in range(x + 4, x + w - 4, 13):
+        d.rectangle([cx, top + 34, cx + 5, GROUND - 8], fill=trim)
+        d.line([cx + 2, top + 36, cx + 2, GROUND - 10], fill=dark)
+        d.rectangle([cx - 1, top + 33, cx + 6, top + 34], fill=dark)
+    # tall windows between columns
+    for i, wx in enumerate(range(x + 11, x + w - 10, 13)):
+        if abs(wx + 3 - (x + w // 2)) < 8:
+            continue
+        d.rectangle([wx, top + 40, wx + 5, GROUND - 16], fill=(70, 110, 160))
+        d.rectangle([wx, top + 40, wx + 5, top + 46], fill=(120, 170, 220))
+    # door (player walks in here)
+    dx = x + w // 2 - 6
+    d.rectangle([dx, GROUND - 30, dx + 12, GROUND - 8], fill=(90, 50, 30))
+    d.rectangle([dx + 1, GROUND - 29, dx + 5, GROUND - 9], fill=(120, 70, 40))
+    d.rectangle([dx + 7, GROUND - 29, dx + 11, GROUND - 9], fill=(120, 70, 40))
+    # steps
+    for k in range(3):
+        d.rectangle([x - 2 + k * 3, GROUND - 8 + k * 3 - 1, x + w + 1 - k * 3, GROUND - 6 + k * 3 - 1],
+                    fill=trim if k % 2 == 0 else dark)
+    # book cart / plants
+    d.rectangle([x - 8, GROUND - 6, x - 2, GROUND - 1], fill=(150, 80, 40))
+    d.ellipse([x - 9, GROUND - 13, x - 1, GROUND - 5], fill=(50, 150, 70))
+
+
 def build_level():
     im = Image.new("RGBA", (LEVEL_W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
     rng = random.Random(7)
     signs = []
-    si = 0
-    seg_starts = [-10] + [cx + CROSS_W for cx, _ in CROSS]
-    seg_ends = [cx for cx, _ in CROSS] + [1660]
-    for a, b in zip(seg_starts, seg_ends):
+    gi = 0
+    seg_starts = [-10] + [cx + CROSS_W for cx, _ in CROSS[:-1]]
+    seg_ends = [cx for cx, _ in CROSS]
+    real = {2: BLOCK_77_79, 4: BLOCK_81_83}
+    for si, (a, b) in enumerate(zip(seg_starts, seg_ends)):
         L = b - a
-        n = max(1, L // 50)
-        base, extra = divmod(L, n)
-        widths = [base + (1 if i < extra else 0) for i in range(n)]
-        rng.shuffle(widths)
+        if si in real:
+            stores = real[si]
+        else:
+            n = max(1, L // 50)
+            stores = [GENERIC[(gi + k) % len(GENERIC)] for k in range(n)]
+            gi += n
+        widths = [store_min_w(st) for st in stores]
+        extra = L - sum(widths)
+        assert extra >= 0, f"segment {si} too short by {-extra}px"
+        for k in range(extra):
+            widths[k % len(widths)] += 1
         x = a
-        for w in widths:
-            store = STORES[si % len(STORES)]
-            si += 1
-            signs.append(draw_building(d, x, w, store, rng))
+        for st, w in zip(stores, widths):
+            signs.append(draw_building(d, x, w, st, rng))
             x += w
     for name, bx, bw, sy, fg in signs:
-        tw = text_w(name)
-        if tw > bw - 4:
-            tw = bw - 4
-        draw_text(im, bx + (bw - text_w(name)) // 2, sy + 2, name, fg)
+        for li, line in enumerate(name.split("/")):
+            draw_text(im, bx + (bw - text_w(line)) // 2, sy + 2 + li * 6, line, fg)
 
     # ground
     d.rectangle([0, GROUND, LEVEL_W, GROUND + 9], fill=(200, 200, 205))
@@ -381,7 +438,6 @@ def build_level():
         px, py = rng2.randrange(LEVEL_W), rng2.randrange(GROUND + 14, H)
         d.point((px, py), fill=(75, 77, 86))
 
-    # cross streets: crosswalk, light pole, street sign
     for cx, label in CROSS:
         d.rectangle([cx, GROUND, cx + CROSS_W - 1, GROUND + 12], fill=(60, 62, 70))
         for i in range(cx + 2, cx + CROSS_W - 2, 6):
@@ -398,20 +454,7 @@ def build_level():
         draw_text(im, px + 3, GROUND - 49, "BERGENLINE", (255, 255, 255))
         draw_text(im, px + 2 + (40 - text_w(label)) // 2, GROUND - 43, label, (255, 255, 255))
 
-    # end: last street sign
-    d.rectangle([1663, GROUND - 52, 1664, GROUND], fill=(50, 90, 60))
-    d.rectangle([1642, GROUND - 52, 1684, GROUND - 39], fill=(20, 120, 60))
-    draw_text(im, 1644, GROUND - 50, "BERGENLINE", (255, 255, 255))
-    draw_text(im, 1654, GROUND - 44, "91 ST", (255, 255, 255))
-
-    # park: hedge, grass strip, trees
-    d.rectangle([1680, GROUND - 14, LEVEL_W, GROUND - 1], fill=(40, 130, 60))
-    for hx in range(1680, LEVEL_W, 8):
-        d.ellipse([hx, GROUND - 18, hx + 9, GROUND - 8], fill=(50, 150, 70))
-    for tx in (1700, 1722, 1770, 1792):
-        d.rectangle([tx + 6, GROUND - 40, tx + 9, GROUND - 14], fill=(100, 60, 30))
-        d.ellipse([tx - 4, GROUND - 74, tx + 20, GROUND - 36], fill=(30, 120, 50))
-        d.ellipse([tx, GROUND - 70, tx + 14, GROUND - 52], fill=(60, 170, 80))
+    draw_library(im, d)
     return im
 
 
@@ -511,7 +554,7 @@ def coin_arc(apex_x):
 
 coin_row(80, 130, GROUND - 12)
 add_block(176)
-add_hydrant(250)
+add_hydrant(225)
 add_pigeon(330)
 coin_arc(400)
 add_cart(470)
@@ -548,7 +591,7 @@ TALLY = 2.4
 T_END = T_CLEAR + TALLY
 DURATION = T_END + 3.5
 PREVIEW = None
-GATE_X = 1748
+GATE_X = LIB_X + LIB_W // 2 - 22   # player stops (and enters) at the door
 
 sfx = []   # (t, kind)
 
@@ -680,12 +723,9 @@ def render():
         else:
             fy = GROUND - 102
         fy = int(fy)
-        dr.rectangle([pxs + 2, fy, pxs + 21, fy + 12], fill=(200, 30, 40))
-        dr.rectangle([pxs + 2, fy + 4, pxs + 21, fy + 8], fill=(255, 255, 255))
-        draw_text(frame, pxs + 8, fy + 4, "NB", (20, 50, 140))
+        dr.rectangle([pxs + 2, fy, pxs + 21, fy + 5], fill=(210, 30, 40))
+        dr.rectangle([pxs + 2, fy + 6, pxs + 21, fy + 12], fill=(255, 205, 30))
 
-        # gate back posts
-        gx = GATE_X - cam
 
         # hydrants
         for hx in hydrants:
@@ -744,18 +784,6 @@ def render():
             paste(frame, img, px - cam, feet - 16)
             if pose == "run" and int(t * 12) % 3 == 0:
                 dr.point((px - cam - 1, feet - 1), fill=(230, 230, 235))
-
-        # gate (front)
-        gd = dr
-        for gpx in (gx - 4, gx + 32):
-            gd.rectangle([gpx, GROUND - 44, gpx + 7, GROUND - 1], fill=(170, 80, 60))
-            for by in range(GROUND - 42, GROUND, 4):
-                gd.line([gpx, by, gpx + 7, by], fill=(140, 60, 45))
-            gd.rectangle([gpx - 1, GROUND - 47, gpx + 8, GROUND - 44], fill=(200, 190, 170))
-        gd.rectangle([gx - 5, GROUND - 62, gx + 40, GROUND - 47], fill=(30, 90, 50))
-        gd.rectangle([gx - 4, GROUND - 61, gx + 39, GROUND - 48], outline=(240, 220, 140))
-        draw_text(frame, gx + 18 - text_w("BRADDOCK") // 2, GROUND - 59, "BRADDOCK", (255, 240, 180))
-        draw_text(frame, gx + 18 - text_w("PARK") // 2, GROUND - 53, "PARK", (255, 240, 180))
 
         # vehicles in the street
         bus_x = 1900 - (t - 4) * 90
