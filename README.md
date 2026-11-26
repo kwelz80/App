@@ -2,6 +2,8 @@
 
 A distraction-free typewriter for Google Docs. People sign in with Google, open or create a doc, and type. Text saves into the doc automatically.
 
+**Easiest way to put it online:** the Google Apps Script version in [`apps-script/`](apps-script/SETUP.md). It takes about 3 minutes and needs no Google Cloud setup or hosting. The rest of this README covers the standalone web version.
+
 ## Features
 
 - Sign in with Google. Open any Google Doc with the Google Picker or start a new one.
