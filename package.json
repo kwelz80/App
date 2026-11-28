@@ -1,0 +1,19 @@
+{
+  "name": "shut-the-world-off",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic offline renderer for a 60s 1080x1920 60fps decompression video",
+  "scripts": {
+    "bake": "node scripts/bake.mjs",
+    "audio": "python3 scripts/audio.py",
+    "audio:sample": "python3 scripts/audio.py --sample 0 10",
+    "preview": "node scripts/render.mjs preview",
+    "render": "node scripts/render.mjs full"
+  },
+  "dependencies": {
+    "@fontsource/nunito": "5.1.0",
+    "playwright": "1.63.0",
+    "three": "0.170.0"
+  }
+}
